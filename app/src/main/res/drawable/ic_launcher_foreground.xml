@@ -5,11 +5,8 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Stylized ₹ in bold vibrant style -->
+    <!-- Clean, modern Rupee symbol (₹) centered -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M30,30h48v6h-48v6h42v6h-42v6h48v6h-48v18h-6v-48h48v6z" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M30,30h6v48h-6z" />
+        android:pathData="M76,32H32v6h44V32z M67.5,43H32v6h35.5c-1.5,9.5-10.5,17-21,17H32v6h13l22,24h8L52,66c14-0.5,25.5-11,27.5-23H76V43z" />
 </vector>

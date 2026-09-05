@@ -1,4 +1,0 @@
-- `[ ]` Modernize Theme.kt and enable Edge-to-Edge.
-- `[ ]` Polish TransactionScreens.kt with M3 components.
-- `[ ]` Create and update App Launcher Icon.
-- `[ ]` Final verification and build test.

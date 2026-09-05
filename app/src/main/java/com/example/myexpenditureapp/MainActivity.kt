@@ -34,6 +34,10 @@ import com.example.myexpenditureapp.ui.navigation.Route
 import com.example.myexpenditureapp.ui.screen.*
 import com.example.myexpenditureapp.ui.theme.MyExpenditureAppTheme
 import com.example.myexpenditureapp.ui.viewmodel.*
+import com.example.myexpenditureapp.notifications.NotificationHelper
+import android.Manifest
+import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
 
 data class NavigationItem(
     val label: String,
@@ -43,15 +47,47 @@ data class NavigationItem(
 )
 
 class MainActivity : ComponentActivity() {
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val smsReceived = permissions[Manifest.permission.RECEIVE_SMS] ?: false
+        val smsRead = permissions[Manifest.permission.READ_SMS] ?: false
+        val notificationsGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions[Manifest.permission.POST_NOTIFICATIONS] ?: false
+        } else {
+            true
+        }
+        
+        if (smsReceived && smsRead) {
+            // Permissions granted
+        }
+        if (notificationsGranted) {
+            NotificationHelper.createNotificationChannels(this)
+            NotificationHelper.scheduleWorkers(this)
+        }
+    }
+
     @OptIn(ExperimentalMaterial3AdaptiveApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Graph.provide(this)
         enableEdgeToEdge()
+        
+        NotificationHelper.createNotificationChannels(this)
+        NotificationHelper.scheduleWorkers(this)
+
+        val permissions = mutableListOf(
+            Manifest.permission.RECEIVE_SMS,
+            Manifest.permission.READ_SMS
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        
+        requestPermissionLauncher.launch(permissions.toTypedArray())
+
         setContent {
-            MyExpenditureAppTheme {
-                MainScreen()
-            }
+            MainScreen()
         }
     }
 }
@@ -59,225 +95,295 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
 fun MainScreen() {
+    val themeViewModel: ThemeViewModel = viewModel()
+    val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
     val backStack = rememberNavBackStack(Route.AccountList)
     val listDetailStrategy = rememberListDetailSceneStrategy<NavKey>(
         directive = calculatePaneScaffoldDirective(currentWindowAdaptiveInfo())
     )
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    Scaffold(
-        bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 8.dp
-            ) {
-                val currentRoute = backStack.lastOrNull()
-                
-                val items = listOf(
-                    NavigationItem("Accounts", Icons.Default.AccountBalance, Icons.Outlined.AccountBalance, Route.AccountList),
-                    NavigationItem("Categories", Icons.Default.Category, Icons.Outlined.Category, Route.CategoryList),
-                    NavigationItem("Transactions", Icons.AutoMirrored.Filled.ReceiptLong, Icons.AutoMirrored.Outlined.ReceiptLong, Route.TransactionList),
-                    NavigationItem("Budgets", Icons.Default.Payments, Icons.Outlined.Payments, Route.BudgetList),
-                    NavigationItem("Analytics", Icons.Default.Analytics, Icons.Outlined.Analytics, Route.Analytics)
-                )
-
-                items.forEach { item ->
-                    val isSelected = when (item.route) {
-                        is Route.AccountList -> currentRoute is Route.AccountList || currentRoute is Route.AccountEdit
-                        is Route.CategoryList -> currentRoute is Route.CategoryList || currentRoute is Route.CategoryEdit
-                        is Route.TransactionList -> currentRoute is Route.TransactionList || currentRoute is Route.TransactionEdit
-                        is Route.BudgetList -> currentRoute is Route.BudgetList || currentRoute is Route.BudgetEdit
-                        is Route.Analytics -> currentRoute is Route.Analytics
-                        else -> false
-                    }
+    MyExpenditureAppTheme(themeMode = themeMode) {
+        Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            bottomBar = {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 8.dp
+                ) {
+                    val currentRoute = backStack.lastOrNull()
                     
-                    NavigationBarItem(
-                        selected = isSelected,
-                        onClick = { 
-                            if (!isSelected) {
-                                backStack.clear()
-                                backStack.add(item.route)
-                            }
-                        },
-                        icon = { 
-                            Icon(
-                                imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon, 
-                                contentDescription = item.label 
-                            ) 
-                        },
-                        label = { Text(item.label, style = MaterialTheme.typography.labelSmall) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            unselectedIconColor = MaterialTheme.colorScheme.outline,
-                            indicatorColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                        )
+                    val items = listOf(
+                        NavigationItem("Accounts", Icons.Default.AccountBalance, Icons.Outlined.AccountBalance, Route.AccountList),
+                        NavigationItem("Categories", Icons.Default.Category, Icons.Outlined.Category, Route.CategoryList),
+                        NavigationItem("Transactions", Icons.AutoMirrored.Filled.ReceiptLong, Icons.AutoMirrored.Outlined.ReceiptLong, Route.TransactionList),
+                        NavigationItem("Budgets", Icons.Default.Payments, Icons.Outlined.Payments, Route.BudgetList),
+                        NavigationItem("Analytics", Icons.Default.Analytics, Icons.Outlined.Analytics, Route.Analytics)
                     )
+
+                    items.forEach { item ->
+                        val isSelected = when (item.route) {
+                            is Route.AccountList -> currentRoute is Route.AccountList || currentRoute is Route.AccountEdit || currentRoute is Route.TransactionReview
+                            is Route.CategoryList -> currentRoute is Route.CategoryList || currentRoute is Route.CategoryEdit
+                            is Route.TransactionList -> currentRoute is Route.TransactionList || currentRoute is Route.TransactionEdit
+                            is Route.BudgetList -> currentRoute is Route.BudgetList || currentRoute is Route.BudgetEdit
+                            is Route.Analytics -> currentRoute is Route.Analytics
+                            else -> false
+                        }
+                        
+                        NavigationBarItem(
+                            selected = isSelected,
+                            onClick = { 
+                                if (!isSelected) {
+                                    backStack.clear()
+                                    backStack.add(item.route)
+                                }
+                            },
+                            icon = { 
+                                Icon(
+                                    imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon, 
+                                    contentDescription = item.label 
+                                ) 
+                            },
+                            label = { Text(item.label, style = MaterialTheme.typography.labelSmall) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                unselectedIconColor = MaterialTheme.colorScheme.outline,
+                                indicatorColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                            )
+                        )
+                    }
                 }
             }
-        }
-    ) { innerPadding ->
-        NavDisplay(
-            backStack = backStack,
-            onBack = { backStack.removeLastOrNull() },
-            sceneStrategy = listDetailStrategy,
-            modifier = Modifier.padding(innerPadding),
-            entryProvider = entryProvider {
-                entry<Route.AccountList>(
-                    metadata = ListDetailSceneStrategy.listPane(
-                        detailPlaceholder = {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("Select an account to edit")
+        ) { innerPadding ->
+            NavDisplay(
+                backStack = backStack,
+                onBack = { backStack.removeLastOrNull() },
+                sceneStrategy = listDetailStrategy,
+                modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
+                entryProvider = entryProvider {
+                    entry<Route.AccountList>(
+                        metadata = ListDetailSceneStrategy.listPane(
+                            detailPlaceholder = {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text("Select an account to edit")
+                                }
                             }
-                        }
-                    )
-                ) {
-                    val viewModel: AccountViewModel = viewModel()
-                    AccountListScreen(
-                        viewModel = viewModel,
-                        onAddAccount = { backStack.add(Route.AccountEdit()) },
-                        onEditAccount = { backStack.add(Route.AccountEdit(it.id)) }
-                    )
-                }
-                entry<Route.AccountEdit>(
-                    metadata = ListDetailSceneStrategy.detailPane()
-                ) { route ->
-                    val viewModel: AccountViewModel = viewModel()
-                    val accounts by viewModel.accounts.collectAsStateWithLifecycle()
-                    val account = accounts.find { it.id == route.accountId }
-                    AccountEditScreen(
-                        account = account,
-                        onSave = {
-                            viewModel.saveAccount(it)
-                            backStack.removeLastOrNull()
-                        },
-                        onBack = { backStack.removeLastOrNull() }
-                    )
-                }
-                entry<Route.CategoryList>(
-                    metadata = ListDetailSceneStrategy.listPane(
-                        detailPlaceholder = {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("Select a category to edit")
-                            }
-                        }
-                    )
-                ) {
-                    val viewModel: CategoryViewModel = viewModel()
-                    CategoryListScreen(
-                        viewModel = viewModel,
-                        onAddCategory = { backStack.add(Route.CategoryEdit(parentId = it)) },
-                        onEditCategory = { backStack.add(Route.CategoryEdit(categoryId = it.id)) }
-                    )
-                }
-                entry<Route.CategoryEdit>(
-                    metadata = ListDetailSceneStrategy.detailPane()
-                ) { route ->
-                    val viewModel: CategoryViewModel = viewModel()
-                    val categories by viewModel.allCategories.collectAsStateWithLifecycle()
-                    val category = categories.find { it.id == route.categoryId }
-                    CategoryEditScreen(
-                        category = category,
-                        parentId = route.parentId,
-                        onSave = {
-                            viewModel.saveCategory(it)
-                            backStack.removeLastOrNull()
-                        },
-                        onBack = { backStack.removeLastOrNull() }
-                    )
-                }
-                entry<Route.TransactionList>(
-                    metadata = ListDetailSceneStrategy.listPane(
-                        detailPlaceholder = {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("Select a transaction to edit")
-                            }
-                        }
-                    )
-                ) {
-                    val viewModel: TransactionViewModel = viewModel()
-                    TransactionListScreen(
-                        viewModel = viewModel,
-                        onAddTransaction = { backStack.add(Route.TransactionEdit()) },
-                        onEditTransaction = { backStack.add(Route.TransactionEdit(it.id)) }
-                    )
-                }
-                entry<Route.TransactionEdit>(
-                    metadata = ListDetailSceneStrategy.detailPane()
-                ) { route ->
-                    val viewModel: TransactionViewModel = viewModel()
-                    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-                    
-                    var transactionToEdit by remember(route.transactionId) { mutableStateOf<Transaction?>(null) }
-                    LaunchedEffect(route.transactionId) {
-                        if (route.transactionId != null) {
-                            transactionToEdit = viewModel.getTransactionById(route.transactionId)
-                        }
+                        )
+                    ) {
+                        val accountViewModel: AccountViewModel = viewModel()
+                        val transactionViewModel: TransactionViewModel = viewModel()
+                        val budgetViewModel: BudgetViewModel = viewModel()
+                        AccountListScreen(
+                            accountViewModel = accountViewModel,
+                            transactionViewModel = transactionViewModel,
+                            budgetViewModel = budgetViewModel,
+                            onAddAccount = { backStack.add(Route.AccountEdit()) },
+                            onEditAccount = { backStack.add(Route.AccountEdit(it.id)) },
+                            onReviewTransaction = { backStack.add(Route.TransactionReview(it.id)) }
+                        )
                     }
+                    entry<Route.AccountEdit>(
+                        metadata = ListDetailSceneStrategy.detailPane()
+                    ) { route ->
+                        val viewModel: AccountViewModel = viewModel()
+                        val accounts by viewModel.accounts.collectAsStateWithLifecycle()
+                        val account = accounts.find { it.id == route.accountId }
+                        
+                        LaunchedEffect(viewModel.eventFlow) {
+                            viewModel.eventFlow.collect { event ->
+                                when (event) {
+                                    is UiEvent.ShowSnackbar -> snackbarHostState.showSnackbar(event.message)
+                                    is UiEvent.Success -> backStack.removeLastOrNull()
+                                }
+                            }
+                        }
 
-                    if (route.transactionId == null || transactionToEdit != null) {
-                        TransactionEditScreen(
-                            transaction = transactionToEdit,
-                            accounts = uiState.accounts,
-                            categories = uiState.categories,
-                            onSave = { accId, toAccId, catId, amt, merch, type, time, id ->
-                                viewModel.saveTransaction(accId, toAccId, catId, amt, merch, type, time, id)
-                                backStack.removeLastOrNull()
+                        AccountEditScreen(
+                            account = account,
+                            onSave = {
+                                viewModel.saveAccount(it)
                             },
                             onDelete = {
-                                viewModel.deleteTransaction(it)
-                                backStack.removeLastOrNull()
+                                viewModel.deleteAccount(it)
                             },
                             onBack = { backStack.removeLastOrNull() }
                         )
-                    } else {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator()
+                    }
+                    entry<Route.TransactionReview>(
+                        metadata = ListDetailSceneStrategy.detailPane()
+                    ) { route ->
+                        val viewModel: TransactionViewModel = viewModel()
+                        var transaction by remember(route.transactionId) { mutableStateOf<Transaction?>(null) }
+                        LaunchedEffect(route.transactionId) {
+                            transaction = viewModel.getTransactionById(route.transactionId)
+                        }
+                        
+                        transaction?.let {
+                            TransactionReviewScreen(
+                                transaction = it,
+                                onMarkAsReviewed = { 
+                                    viewModel.markAsReviewed(it.id)
+                                    backStack.removeLastOrNull()
+                                },
+                                onBack = { backStack.removeLastOrNull() }
+                            )
                         }
                     }
-                }
-                entry<Route.BudgetList>(
-                    metadata = ListDetailSceneStrategy.listPane(
-                        detailPlaceholder = {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("Select a budget to edit")
+                    entry<Route.CategoryList>(
+                        metadata = ListDetailSceneStrategy.listPane(
+                            detailPlaceholder = {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text("Select a category to edit")
+                                }
+                            }
+                        )
+                    ) {
+                        val viewModel: CategoryViewModel = viewModel()
+                        CategoryListScreen(
+                            viewModel = viewModel,
+                            onAddCategory = { backStack.add(Route.CategoryEdit(parentId = it)) },
+                            onEditCategory = { backStack.add(Route.CategoryEdit(categoryId = it.id)) }
+                        )
+                    }
+                    entry<Route.CategoryEdit>(
+                        metadata = ListDetailSceneStrategy.detailPane()
+                    ) { route ->
+                        val viewModel: CategoryViewModel = viewModel()
+                        val categories by viewModel.allCategories.collectAsStateWithLifecycle()
+                        val category = categories.find { it.id == route.categoryId }
+
+                        LaunchedEffect(viewModel.eventFlow) {
+                            viewModel.eventFlow.collect { event ->
+                                when (event) {
+                                    is UiEvent.ShowSnackbar -> snackbarHostState.showSnackbar(event.message)
+                                    is UiEvent.Success -> backStack.removeLastOrNull()
+                                }
                             }
                         }
-                    )
-                ) {
-                    val viewModel: BudgetViewModel = viewModel()
-                    BudgetListScreen(
-                        viewModel = viewModel,
-                        onAddBudget = { backStack.add(Route.BudgetEdit()) },
-                        onEditBudget = { backStack.add(Route.BudgetEdit(it.id)) }
-                    )
+
+                        CategoryEditScreen(
+                            category = category,
+                            parentId = route.parentId,
+                            onSave = {
+                                viewModel.saveCategory(it)
+                            },
+                            onDelete = {
+                                viewModel.deleteCategory(it)
+                            },
+                            onBack = { backStack.removeLastOrNull() }
+                        )
+                    }
+                    entry<Route.TransactionList>(
+                        metadata = ListDetailSceneStrategy.listPane(
+                            detailPlaceholder = {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text("Select a transaction to edit")
+                                }
+                            }
+                        )
+                    ) {
+                        val viewModel: TransactionViewModel = viewModel()
+                        TransactionListScreen(
+                            viewModel = viewModel,
+                            onAddTransaction = { backStack.add(Route.TransactionEdit()) },
+                            onEditTransaction = { backStack.add(Route.TransactionEdit(it.id)) }
+                        )
+                    }
+                    entry<Route.TransactionEdit>(
+                        metadata = ListDetailSceneStrategy.detailPane()
+                    ) { route ->
+                        val viewModel: TransactionViewModel = viewModel()
+                        val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+                        
+                        var transactionToEdit by remember(route.transactionId) { mutableStateOf<Transaction?>(null) }
+                        LaunchedEffect(route.transactionId) {
+                            if (route.transactionId != null) {
+                                transactionToEdit = viewModel.getTransactionById(route.transactionId)
+                            }
+                        }
+
+                        LaunchedEffect(viewModel.eventFlow) {
+                            viewModel.eventFlow.collect { event ->
+                                when (event) {
+                                    is UiEvent.ShowSnackbar -> snackbarHostState.showSnackbar(event.message)
+                                    is UiEvent.Success -> backStack.removeLastOrNull()
+                                }
+                            }
+                        }
+
+                        if (route.transactionId == null || transactionToEdit != null) {
+                            TransactionEditScreen(
+                                transaction = transactionToEdit,
+                                accounts = uiState.accounts,
+                                categories = uiState.categories,
+                                onSave = { accId, toAccId, catId, amt, merch, type, time, id ->
+                                    viewModel.saveTransaction(accId, toAccId, catId, amt, merch, type, time, id)
+                                },
+                                onDelete = {
+                                    viewModel.deleteTransaction(it)
+                                },
+                                onBack = { backStack.removeLastOrNull() }
+                            )
+                        } else {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator()
+                            }
+                        }
+                    }
+                    entry<Route.BudgetList>(
+                        metadata = ListDetailSceneStrategy.listPane(
+                            detailPlaceholder = {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text("Select a budget to edit")
+                                }
+                            }
+                        )
+                    ) {
+                        val viewModel: BudgetViewModel = viewModel()
+                        BudgetListScreen(
+                            viewModel = viewModel,
+                            onAddBudget = { backStack.add(Route.BudgetEdit()) },
+                            onEditBudget = { backStack.add(Route.BudgetEdit(it.id)) }
+                        )
+                    }
+                    entry<Route.BudgetEdit>(
+                        metadata = ListDetailSceneStrategy.detailPane()
+                    ) { route ->
+                        val viewModel: BudgetViewModel = viewModel()
+                        val budgets by viewModel.budgetsWithProgress.collectAsStateWithLifecycle()
+                        val categories by viewModel.allCategories.collectAsStateWithLifecycle()
+                        val budget = budgets.find { it.budget.id == route.budgetId }?.budget
+
+                        LaunchedEffect(viewModel.eventFlow) {
+                            viewModel.eventFlow.collect { event ->
+                                when (event) {
+                                    is UiEvent.ShowSnackbar -> snackbarHostState.showSnackbar(event.message)
+                                    is UiEvent.Success -> backStack.removeLastOrNull()
+                                }
+                            }
+                        }
+
+                        BudgetEditScreen(
+                            budget = budget,
+                            categories = categories,
+                            onSave = {
+                                viewModel.saveBudget(it)
+                            },
+                            onDelete = {
+                                viewModel.deleteBudget(it)
+                            },
+                            onBack = { backStack.removeLastOrNull() }
+                        )
+                    }
+                    entry<Route.Analytics>(
+                        metadata = ListDetailSceneStrategy.listPane()
+                    ) {
+                        val viewModel: AnalyticsViewModel = viewModel()
+                        AnalyticsScreen(viewModel = viewModel)
+                    }
                 }
-                entry<Route.BudgetEdit>(
-                    metadata = ListDetailSceneStrategy.detailPane()
-                ) { route ->
-                    val viewModel: BudgetViewModel = viewModel()
-                    val budgets by viewModel.budgetsWithProgress.collectAsStateWithLifecycle()
-                    val categories by viewModel.allCategories.collectAsStateWithLifecycle()
-                    val budget = budgets.find { it.budget.id == route.budgetId }?.budget
-                    BudgetEditScreen(
-                        budget = budget,
-                        categories = categories,
-                        onSave = {
-                            viewModel.saveBudget(it)
-                            backStack.removeLastOrNull()
-                        },
-                        onDelete = {
-                            viewModel.deleteBudget(it)
-                            backStack.removeLastOrNull()
-                        },
-                        onBack = { backStack.removeLastOrNull() }
-                    )
-                }
-                entry<Route.Analytics>(
-                    metadata = ListDetailSceneStrategy.listPane()
-                ) {
-                    val viewModel: AnalyticsViewModel = viewModel()
-                    AnalyticsScreen(viewModel = viewModel)
-                }
-            }
-        )
+            )
+        }
     }
 }

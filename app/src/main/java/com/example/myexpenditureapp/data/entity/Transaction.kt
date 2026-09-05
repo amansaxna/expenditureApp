@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import java.math.BigDecimal
 
 @Entity(
     tableName = "transactions",
@@ -38,9 +39,10 @@ data class Transaction(
     val accountId: Long,
     val toAccountId: Long? = null, // Used for Transfers
     val categoryId: Long?,
-    val amount: Double,
+    val amount: BigDecimal,
     val merchant: String,
     val timestamp: Long,
     val type: String, // "Income", "Expense", "Transfer"
-    val smsId: String? = null
+    val smsId: String? = null,
+    val isReviewed: Boolean = true
 )

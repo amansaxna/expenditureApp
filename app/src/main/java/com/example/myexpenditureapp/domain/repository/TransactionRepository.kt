@@ -13,8 +13,11 @@ interface TransactionRepository {
         endDate: Long? = null,
         query: String? = null
     ): Flow<List<Transaction>>
+    fun getUnreviewedTransactions(): Flow<List<Transaction>>
+    suspend fun markAsReviewed(id: Long)
     suspend fun saveTransaction(transaction: Transaction)
     suspend fun deleteTransaction(transaction: Transaction)
     suspend fun getTransactionById(id: Long): Transaction?
     suspend fun existsBySmsId(smsId: String): Boolean
+    suspend fun deleteAllTransactions()
 }

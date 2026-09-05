@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.room.TypeConverters
 import com.example.myexpenditureapp.data.dao.AccountDao
 import com.example.myexpenditureapp.data.dao.BudgetDao
 import com.example.myexpenditureapp.data.dao.CategoryDao
@@ -19,9 +19,10 @@ import kotlinx.coroutines.launch
 
 @Database(
     entities = [Account::class, Category::class, Transaction::class, Budget::class],
-    version = 1,
+    version = 5,
     exportSchema = false
 )
+@TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun accountDao(): AccountDao
     abstract fun categoryDao(): CategoryDao
@@ -38,17 +39,16 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "expenditure_database"
-                ).addCallback(object : Callback() {
-                    override fun onOpen(db: SupportSQLiteDatabase) {
-                        super.onOpen(db)
-                        INSTANCE?.let { database ->
-                            CoroutineScope(Dispatchers.IO).launch {
-                                DataSeeder.seedData(database)
-                            }
-                        }
-                    }
-                }).build()
+                )
+                    .fallbackToDestructiveMigration()
+                    .build()
                 INSTANCE = instance
+                
+                // Seeding categories on a background thread
+                CoroutineScope(Dispatchers.IO).launch {
+                    DataSeeder.seedData(instance)
+                }
+                
                 instance
             }
         }

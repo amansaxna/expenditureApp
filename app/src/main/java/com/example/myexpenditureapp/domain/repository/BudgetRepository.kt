@@ -5,7 +5,8 @@ import com.example.myexpenditureapp.domain.model.BudgetWithProgress
 import kotlinx.coroutines.flow.Flow
 
 interface BudgetRepository {
-    fun getBudgetsWithProgress(): Flow<List<BudgetWithProgress>>
+    fun getAllBudgets(month: Int? = null, year: Int? = null): Flow<List<Budget>>
+    fun getBudgetsWithProgress(month: Int, year: Int): Flow<List<BudgetWithProgress>>
     suspend fun saveBudget(budget: Budget)
     suspend fun deleteBudget(budget: Budget)
 }

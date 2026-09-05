@@ -23,6 +23,9 @@ sealed interface Route : NavKey {
     data class TransactionEdit(val transactionId: Long? = null) : Route
 
     @Serializable
+    data class TransactionReview(val transactionId: Long) : Route
+
+    @Serializable
     data object BudgetList : Route
 
     @Serializable

@@ -4,12 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myexpenditureapp.data.Graph
 import com.example.myexpenditureapp.data.entity.Category
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 class CategoryViewModel : ViewModel() {
+    private val _eventFlow = MutableSharedFlow<UiEvent>()
+    val eventFlow = _eventFlow.asSharedFlow()
+
     val allCategories: StateFlow<List<Category>> = Graph.getCategoriesUseCase.getAll()
         .stateIn(
             scope = viewModelScope,
@@ -25,14 +26,30 @@ class CategoryViewModel : ViewModel() {
         )
 
     fun saveCategory(category: Category) {
+        if (category.name.isBlank()) {
+            viewModelScope.launch { _eventFlow.emit(UiEvent.ShowSnackbar("Category name cannot be empty")) }
+            return
+        }
         viewModelScope.launch {
-            Graph.saveCategoryUseCase(category)
+            try {
+                Graph.saveCategoryUseCase(category)
+                _eventFlow.emit(UiEvent.Success)
+                _eventFlow.emit(UiEvent.ShowSnackbar("Category saved"))
+            } catch (e: Exception) {
+                _eventFlow.emit(UiEvent.ShowSnackbar("Error saving category: ${e.message}"))
+            }
         }
     }
 
     fun deleteCategory(category: Category) {
         viewModelScope.launch {
-            Graph.deleteCategoryUseCase(category)
+            try {
+                Graph.deleteCategoryUseCase(category)
+                _eventFlow.emit(UiEvent.Success)
+                _eventFlow.emit(UiEvent.ShowSnackbar("Category deleted"))
+            } catch (e: Exception) {
+                _eventFlow.emit(UiEvent.ShowSnackbar("Error deleting category: ${e.message}"))
+            }
         }
     }
 

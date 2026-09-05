@@ -5,63 +5,78 @@ import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Gold,
-    onPrimary = NavyDeep,
-    primaryContainer = GoldDark,
-    onPrimaryContainer = Color.White,
-    secondary = Slate,
+    primary = AccentVibrant,
+    onPrimary = Color.White,
+    primaryContainer = NavyLight,
+    onPrimaryContainer = OffWhite,
+    secondary = AccentSuccess,
     onSecondary = Color.White,
-    tertiary = NavyLight,
-    onTertiary = Color.White,
+    secondaryContainer = NavyLighter,
+    onSecondaryContainer = AccentSuccess,
+    tertiary = Gold,
+    onTertiary = NavyDeep,
     background = NavyDeep,
     onBackground = OffWhite,
     surface = NavyLight,
     onSurface = OffWhite,
-    error = ExpenseRed
+    surfaceVariant = NavyLighter,
+    onSurfaceVariant = Slate,
+    outline = NavyAccent,
+    error = AccentError,
+    onError = Color.White
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = NavyDeep,
+    primary = AccentVibrant,
     onPrimary = Color.White,
-    primaryContainer = NavyLight,
-    onPrimaryContainer = Color.White,
-    secondary = GoldDark,
-    onSecondary = NavyDeep,
-    tertiary = Gold,
-    onTertiary = NavyDeep,
-    background = Color(0xFFF8F9FA),
+    primaryContainer = Color(0xFFDBEAFE),
+    onPrimaryContainer = Color(0xFF1E3A8A),
+    secondary = AccentSuccess,
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFD1FAE5),
+    onSecondaryContainer = Color(0xFF064E3B),
+    tertiary = GoldDark,
+    onTertiary = Color.White,
+    background = Color(0xFFF8FAFC),
     onBackground = NavyDeep,
     surface = Color.White,
     onSurface = NavyDeep,
-    error = ExpenseRed
+    surfaceVariant = Color(0xFFF1F5F9),
+    onSurfaceVariant = Color(0xFF475569),
+    outline = Color(0xFF94A3B8),
+    error = AccentError,
+    onError = Color.White
 )
+
+enum class ThemeMode { SYSTEM, LIGHT, DARK }
+val LocalThemeMode = staticCompositionLocalOf { ThemeMode.SYSTEM }
 
 @Composable
 fun MyExpenditureAppTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+    val darkTheme = when (themeMode) {
+        ThemeMode.SYSTEM -> isSystemInDarkTheme()
+        ThemeMode.LIGHT -> false
+        ThemeMode.DARK -> true
     }
+    
+    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
-    )
+    CompositionLocalProvider(LocalThemeMode provides themeMode) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            content = content
+        )
+    }
 }

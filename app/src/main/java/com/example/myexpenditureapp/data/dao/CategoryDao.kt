@@ -9,6 +9,9 @@ interface CategoryDao {
     @Query("SELECT * FROM categories")
     fun getAllCategories(): Flow<List<Category>>
 
+    @Query("SELECT * FROM categories")
+    suspend fun getAllCategoriesList(): List<Category>
+
     @Query("SELECT * FROM categories WHERE parentId IS NULL")
     fun getRootCategories(): Flow<List<Category>>
 

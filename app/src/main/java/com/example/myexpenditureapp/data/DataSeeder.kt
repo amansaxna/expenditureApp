@@ -4,177 +4,125 @@ import com.example.myexpenditureapp.data.entity.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import java.math.BigDecimal
 import java.util.*
 
+/**
+ * DataSeeder handles initial data setup for the application.
+ * On a fresh install, it seeds the default Category hierarchy with emojis.
+ */
 object DataSeeder {
     suspend fun seedData(database: AppDatabase) {
         withContext(Dispatchers.IO) {
-            val accountDao = database.accountDao()
             val categoryDao = database.categoryDao()
+            val accountDao = database.accountDao()
             val transactionDao = database.transactionDao()
-            val budgetDao = database.budgetDao()
 
-            // 1. Seed Accounts if empty
-            val existingAccounts = accountDao.getAllAccounts().first()
-            if (existingAccounts.isEmpty()) {
-                accountDao.insertAccount(Account(name = "Main Bank", type = "Bank", balance = 150000.0))
-                accountDao.insertAccount(Account(name = "Cash", type = "Wallet", balance = 5000.0))
-                accountDao.insertAccount(Account(name = "Credit Card", type = "Credit Card", balance = -12000.0))
-            }
-
-            // 2. Seed Categories if empty
-            val existingCategories = categoryDao.getAllCategories().first()
+            // 1. Seed Categories if empty
+            val existingCategories = categoryDao.getAllCategoriesList()
             if (existingCategories.isEmpty()) {
-                categoryDao.insertCategory(Category(name = "Income", icon = "payments"))
-                categoryDao.insertCategory(Category(name = "Food", icon = "restaurant"))
-                categoryDao.insertCategory(Category(name = "Entertainment", icon = "movie"))
-                categoryDao.insertCategory(Category(name = "Utilities", icon = "home"))
-                categoryDao.insertCategory(Category(name = "Transportation", icon = "directions_car"))
+                // Root Categories
+                categoryDao.insertCategory(Category(name = "Housing", icon = "🏠"))
+                categoryDao.insertCategory(Category(name = "Food & Dining", icon = "🍽️"))
+                categoryDao.insertCategory(Category(name = "Transportation", icon = "🚗"))
+                categoryDao.insertCategory(Category(name = "Personal Care", icon = "🧘"))
+                categoryDao.insertCategory(Category(name = "Entertainment", icon = "🎬"))
+                categoryDao.insertCategory(Category(name = "Shopping", icon = "🛒"))
+                categoryDao.insertCategory(Category(name = "Finance", icon = "💰"))
+                categoryDao.insertCategory(Category(name = "Education", icon = "📚"))
 
-                // Fetch categories to get IDs for subcategories and budgets
-                val categories = categoryDao.getAllCategories().first()
-                val incomeId = categories.find { it.name == "Income" }?.id
-                val foodId = categories.find { it.name == "Food" }?.id
-                val entertainmentId = categories.find { it.name == "Entertainment" }?.id
-                val utilitiesId = categories.find { it.name == "Utilities" }?.id
-                val transportationId = categories.find { it.name == "Transportation" }?.id
+                // Fetch categories to get IDs for subcategories
+                val categories = categoryDao.getAllCategoriesList()
+                val housingId = categories.find { it.name == "Housing" }?.id
+                val foodId = categories.find { it.name == "Food & Dining" }?.id
+                val transportId = categories.find { it.name == "Transportation" }?.id
+                val personalId = categories.find { it.name == "Personal Care" }?.id
+                val financeId = categories.find { it.name == "Finance" }?.id
 
                 // Subcategories
-                incomeId?.let {
-                    categoryDao.insertCategory(Category(name = "Salary", parentId = it))
-                    categoryDao.insertCategory(Category(name = "Bonus", parentId = it))
+                housingId?.let {
+                    categoryDao.insertCategory(Category(name = "Rent", parentId = it, icon = "🏠"))
+                    categoryDao.insertCategory(Category(name = "Utilities", parentId = it, icon = "⚡"))
                 }
                 foodId?.let {
-                    categoryDao.insertCategory(Category(name = "Groceries", parentId = it))
-                    categoryDao.insertCategory(Category(name = "Dining Out", parentId = it))
+                    categoryDao.insertCategory(Category(name = "Groceries", parentId = it, icon = "🛒"))
+                    categoryDao.insertCategory(Category(name = "Restaurants", parentId = it, icon = "🍔"))
+                    categoryDao.insertCategory(Category(name = "Cafes", parentId = it, icon = "☕"))
                 }
-                entertainmentId?.let {
-                    categoryDao.insertCategory(Category(name = "Movies", parentId = it))
-                    categoryDao.insertCategory(Category(name = "Games", parentId = it))
+                transportId?.let {
+                    categoryDao.insertCategory(Category(name = "Fuel", parentId = it, icon = "⛽"))
+                    categoryDao.insertCategory(Category(name = "Public Transit", parentId = it, icon = "🚌"))
                 }
-                utilitiesId?.let {
-                    categoryDao.insertCategory(Category(name = "Rent", parentId = it))
-                    categoryDao.insertCategory(Category(name = "Electricity", parentId = it))
+                financeId?.let {
+                    categoryDao.insertCategory(Category(name = "Salary", parentId = it, icon = "💰"))
+                    categoryDao.insertCategory(Category(name = "Dividends", parentId = it, icon = "📈"))
                 }
-                transportationId?.let {
-                    categoryDao.insertCategory(Category(name = "Fuel", parentId = it))
-                }
-
-                // Seed Budgets
-                if (foodId != null) {
-                    budgetDao.insertBudget(Budget(categoryId = foodId, limitAmount = 15000.0, period = "Monthly"))
-                }
-                if (entertainmentId != null) {
-                    budgetDao.insertBudget(Budget(categoryId = entertainmentId, limitAmount = 5000.0, period = "Monthly"))
-                }
+                personalId?.let { categoryDao.insertCategory(Category(name = "Gym", parentId = it, icon = "🏋️‍♂️")) }
             }
 
-            // 3. Seed Transactions if empty
+            // 2. Seed Accounts if empty
+            val accounts = accountDao.getAllAccounts().first()
+            if (accounts.isEmpty()) {
+                accountDao.insertAccount(Account(name = "SBI Bank", type = "Bank", balance = BigDecimal("50000")))
+                accountDao.insertAccount(Account(name = "Paytm Wallet", type = "Wallet", balance = BigDecimal("1500")))
+                accountDao.insertAccount(Account(name = "Cash", type = "Cash", balance = BigDecimal("2000")))
+            }
+
+            // 3. Seed Transactions for last 3 months if empty
             val existingTransactions = transactionDao.getAllTransactions().first()
             if (existingTransactions.isEmpty()) {
-                val accounts = accountDao.getAllAccounts().first()
-                val mainBankId = accounts.find { it.name == "Main Bank" }?.id ?: accounts.firstOrNull()?.id
-                val cashId = accounts.find { it.name == "Cash" }?.id ?: accounts.lastOrNull()?.id
-                val creditCardId = accounts.find { it.name == "Credit Card" }?.id ?: mainBankId
+                val allAccounts = accountDao.getAllAccounts().first()
+                val allCategories = categoryDao.getAllCategoriesList()
+                
+                if (allAccounts.isNotEmpty() && allCategories.isNotEmpty()) {
+                    val sbi = allAccounts.find { it.name == "SBI Bank" }?.id ?: allAccounts.first().id
+                    val cash = allAccounts.find { it.name == "Cash" }?.id ?: allAccounts.first().id
+                    
+                    val groceries = allCategories.find { it.name == "Groceries" }?.id
+                    val rent = allCategories.find { it.name == "Rent" }?.id
+                    val fuel = allCategories.find { it.name == "Fuel" }?.id
+                    val salary = allCategories.find { it.name == "Salary" }?.id
+                    val gym = allCategories.find { it.name == "Gym" }?.id
+                    val dining = allCategories.find { it.name == "Restaurants" }?.id
 
-                val allCategories = categoryDao.getAllCategories().first()
-                val salaryId = allCategories.find { it.name == "Salary" }?.id
-                val groceriesId = allCategories.find { it.name == "Groceries" }?.id
-                val diningId = allCategories.find { it.name == "Dining Out" }?.id
-                val moviesId = allCategories.find { it.name == "Movies" }?.id
-                val rentId = allCategories.find { it.name == "Rent" }?.id
-                val fuelId = allCategories.find { it.name == "Fuel" }?.id
+                    // Helper to add transaction
+                    suspend fun addTx(amount: String, merchant: String, type: String, catId: Long?, accId: Long, monthsAgo: Int, day: Int) {
+                        val cal = Calendar.getInstance()
+                        cal.add(Calendar.MONTH, -monthsAgo)
+                        val maxDay = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+                        cal.set(Calendar.DAY_OF_MONTH, day.coerceIn(1, maxDay))
+                        transactionDao.insertTransaction(Transaction(
+                            accountId = accId,
+                            categoryId = catId,
+                            amount = BigDecimal(amount),
+                            merchant = merchant,
+                            type = type,
+                            timestamp = cal.timeInMillis,
+                            isReviewed = true
+                        ))
+                    }
 
-                if (mainBankId != null) {
-                    // Seed Transactions (Spread over last 3 months)
-                    for (monthOffset in -2..0) {
-                        val monthCalendar = Calendar.getInstance()
-                        monthCalendar.add(Calendar.MONTH, monthOffset)
+                    // Seed data for last 3 months
+                    for (m in 0..2) {
+                        addTx("45000", "Monthly Salary", "Income", salary, sbi, m, 1)
+                        addTx("15000", "House Rent", "Expense", rent, sbi, m, 5)
+                        addTx("1200", "Supermarket", "Expense", groceries, cash, m, 10)
+                        addTx("800", "Petrol Pump", "Expense", fuel, sbi, m, 12)
+                        addTx("2500", "Cult Gym Membership", "Expense", gym, sbi, m, 2)
+                        addTx("1500", "Dinner at Social", "Expense", dining, sbi, m, 20)
+                        addTx("500", "Blue Tokai Coffee", "Expense", dining, cash, m, 15)
+                        addTx("3000", "Electricity Bill", "Expense", null, sbi, m, 18)
                         
-                        // Income: Salary on 1st
-                        monthCalendar.set(Calendar.DAY_OF_MONTH, 1)
-                        transactionDao.insertTransaction(Transaction(
-                            accountId = mainBankId,
-                            categoryId = salaryId,
-                            amount = 85000.0,
-                            merchant = "Company Inc",
-                            timestamp = monthCalendar.timeInMillis,
-                            type = "Income"
-                        ))
-                        
-                        // Expense: Rent on 2nd
-                        monthCalendar.set(Calendar.DAY_OF_MONTH, 2)
-                        transactionDao.insertTransaction(Transaction(
-                            accountId = mainBankId,
-                            categoryId = rentId,
-                            amount = 25000.0,
-                            merchant = "Landlord",
-                            timestamp = monthCalendar.timeInMillis,
-                            type = "Expense"
-                        ))
-
-                        // Expense: Groceries on 5th
-                        monthCalendar.set(Calendar.DAY_OF_MONTH, 5)
-                        transactionDao.insertTransaction(Transaction(
-                            accountId = mainBankId,
-                            categoryId = groceriesId,
-                            amount = 4500.0,
-                            merchant = "Reliance Fresh",
-                            timestamp = monthCalendar.timeInMillis,
-                            type = "Expense"
-                        ))
-
-                        // Expense: Dining Out on 10th
-                        if (cashId != null) {
-                            monthCalendar.set(Calendar.DAY_OF_MONTH, 10)
-                            transactionDao.insertTransaction(Transaction(
-                                accountId = cashId,
-                                categoryId = diningId,
-                                amount = 1200.0,
-                                merchant = "Local Restaurant",
-                                timestamp = monthCalendar.timeInMillis,
-                                type = "Expense"
-                            ))
-
-                            // Transfer: Bank to Cash on 12th
-                            monthCalendar.set(Calendar.DAY_OF_MONTH, 12)
-                            transactionDao.insertTransaction(Transaction(
-                                accountId = mainBankId,
-                                toAccountId = cashId,
-                                categoryId = null,
-                                amount = 5000.0,
-                                merchant = "ATM Withdrawal",
-                                timestamp = monthCalendar.timeInMillis,
-                                type = "Transfer"
-                            ))
+                        // Weekly expenses
+                        for (w in 1..4) {
+                            addTx("450", "Weekly Groceries", "Expense", groceries, cash, m, w * 7)
+                            addTx("600", "Uber Ride", "Expense", fuel, sbi, m, w * 7 - 3)
+                            addTx("120", "Milk & Snacks", "Expense", groceries, cash, m, w * 7 - 5)
                         }
-
-                        // Expense: Fuel on 15th
-                        if (creditCardId != null) {
-                            monthCalendar.set(Calendar.DAY_OF_MONTH, 15)
-                            transactionDao.insertTransaction(Transaction(
-                                accountId = creditCardId,
-                                categoryId = fuelId,
-                                amount = 3000.0,
-                                merchant = "Indian Oil",
-                                timestamp = monthCalendar.timeInMillis,
-                                type = "Expense"
-                            ))
-                        }
-
-                        // Expense: Movies on 20th
-                        monthCalendar.set(Calendar.DAY_OF_MONTH, 20)
-                        transactionDao.insertTransaction(Transaction(
-                            accountId = mainBankId,
-                            categoryId = moviesId,
-                            amount = 800.0,
-                            merchant = "PVR Cinemas",
-                            timestamp = monthCalendar.timeInMillis,
-                            type = "Expense"
-                        ))
                     }
                 }
             }
         }
     }
 }
+

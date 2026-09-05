@@ -31,6 +31,12 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE categoryId = :categoryId AND timestamp >= :startDate AND timestamp <= :endDate")
     fun getTransactionsByCategoryAndDate(categoryId: Long, startDate: Long, endDate: Long): Flow<List<Transaction>>
 
+    @Query("SELECT * FROM transactions WHERE isReviewed = 0 ORDER BY timestamp DESC")
+    fun getUnreviewedTransactions(): Flow<List<Transaction>>
+
+    @Query("UPDATE transactions SET isReviewed = 1 WHERE id = :id")
+    suspend fun markAsReviewed(id: Long)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTransaction(transaction: Transaction)
 
@@ -42,4 +48,7 @@ interface TransactionDao {
 
     @Query("SELECT EXISTS(SELECT 1 FROM transactions WHERE smsId = :smsId)")
     suspend fun existsBySmsId(smsId: String): Boolean
+
+    @Query("DELETE FROM transactions")
+    suspend fun deleteAllTransactions()
 }

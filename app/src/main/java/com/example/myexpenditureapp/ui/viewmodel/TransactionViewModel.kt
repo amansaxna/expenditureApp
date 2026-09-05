@@ -1,14 +1,23 @@
 package com.example.myexpenditureapp.ui.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myexpenditureapp.data.Graph
 import com.example.myexpenditureapp.data.entity.Account
 import com.example.myexpenditureapp.data.entity.Category
 import com.example.myexpenditureapp.data.entity.Transaction
+import com.example.myexpenditureapp.notifications.NotificationHelper
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.math.BigDecimal
+import java.util.Calendar
+
+sealed class UiEvent {
+    data class ShowSnackbar(val message: String) : UiEvent()
+    object Success : UiEvent()
+}
 
 data class TransactionUiState(
     val transactions: List<Transaction> = emptyList(),
@@ -17,10 +26,15 @@ data class TransactionUiState(
     val searchQuery: String = "",
     val filterAccountId: Long? = null,
     val filterCategoryId: Long? = null,
-    val isLoading: Boolean = false
+    val selectedMonth: Int = Calendar.getInstance().get(Calendar.MONTH),
+    val selectedYear: Int = Calendar.getInstance().get(Calendar.YEAR),
+    val isLoading: Boolean = false,
+    val totalIncome: BigDecimal = BigDecimal.ZERO,
+    val totalExpense: BigDecimal = BigDecimal.ZERO,
+    val netBalance: BigDecimal = BigDecimal.ZERO
 )
 
-class TransactionViewModel : ViewModel() {
+class TransactionViewModel(application: Application) : AndroidViewModel(application) {
     private val transactionRepository = Graph.transactionRepository
     private val getAccountsUseCase = Graph.getAccountsUseCase
     private val getCategoriesUseCase = Graph.getCategoriesUseCase
@@ -29,34 +43,66 @@ class TransactionViewModel : ViewModel() {
     private val _searchQuery = MutableStateFlow("")
     private val _filterAccountId = MutableStateFlow<Long?>(null)
     private val _filterCategoryId = MutableStateFlow<Long?>(null)
+    private val _selectedMonth = MutableStateFlow(Calendar.getInstance().get(Calendar.MONTH))
+    private val _selectedYear = MutableStateFlow(Calendar.getInstance().get(Calendar.YEAR))
+
+    val unreviewedTransactions: StateFlow<List<Transaction>> = transactionRepository.getUnreviewedTransactions()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    private val _eventFlow = MutableSharedFlow<UiEvent>()
+    val eventFlow = _eventFlow.asSharedFlow()
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<TransactionUiState> = combine(
-        _searchQuery,
-        _filterAccountId,
-        _filterCategoryId,
+        combine(_searchQuery, _filterAccountId, _filterCategoryId) { q, a, c -> Triple(q, a, c) },
+        combine(_selectedMonth, _selectedYear) { m, y -> m to y },
         getAccountsUseCase(),
         getCategoriesUseCase.getAll()
-    ) { query, accId, catId, accounts, categories ->
-        Triple(query, accId, catId) to (accounts to categories)
-    }.flatMapLatest { (params, data) ->
+    ) { params, dateParams, accounts, categories ->
         val (query, accId, catId) = params
-        val (accounts, categories) = data
+        val (month, year) = dateParams
+        
+        val cal = Calendar.getInstance()
+        cal.set(year, month, 1, 0, 0, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        val startDate = cal.timeInMillis
+        
+        cal.set(Calendar.DAY_OF_MONTH, cal.getActualMaximum(Calendar.DAY_OF_MONTH))
+        cal.set(Calendar.HOUR_OF_DAY, 23)
+        cal.set(Calendar.MINUTE, 59)
+        cal.set(Calendar.SECOND, 59)
+        cal.set(Calendar.MILLISECOND, 999)
+        val endDate = cal.timeInMillis
+
         transactionRepository.getFilteredTransactions(
             accountId = accId,
             categoryId = catId,
-            query = if (query.isEmpty()) null else query
+            query = if (query.isEmpty()) null else query,
+            startDate = startDate,
+            endDate = endDate
         ).map { transactions ->
+            val income = transactions.filter { it.type == "Income" }.fold(BigDecimal.ZERO) { acc, t -> acc.add(t.amount) }
+            val expense = transactions.filter { it.type == "Expense" }.fold(BigDecimal.ZERO) { acc, t -> acc.add(t.amount) }
             TransactionUiState(
                 transactions = transactions,
                 accounts = accounts,
                 categories = categories,
                 searchQuery = query,
                 filterAccountId = accId,
-                filterCategoryId = catId
+                filterCategoryId = catId,
+                selectedMonth = month,
+                selectedYear = year,
+                totalIncome = income,
+                totalExpense = expense,
+                netBalance = income.subtract(expense)
             )
         }
-    }.stateIn(
+    }.flatMapLatest { it }
+    .stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = TransactionUiState(isLoading = true)
@@ -74,6 +120,11 @@ class TransactionViewModel : ViewModel() {
         _filterCategoryId.value = categoryId
     }
 
+    fun onMonthYearChange(month: Int, year: Int) {
+        _selectedMonth.value = month
+        _selectedYear.value = year
+    }
+
     suspend fun getTransactionById(id: Long): Transaction? {
         return transactionRepository.getTransactionById(id)
     }
@@ -82,42 +133,96 @@ class TransactionViewModel : ViewModel() {
         accountId: Long,
         toAccountId: Long? = null,
         categoryId: Long? = null,
-        amount: Double,
+        amount: BigDecimal,
         merchant: String,
         type: String,
         timestamp: Long = System.currentTimeMillis(),
         id: Long = 0L
     ) {
+        if (amount <= BigDecimal.ZERO) {
+            viewModelScope.launch { _eventFlow.emit(UiEvent.ShowSnackbar("Amount must be greater than zero")) }
+            return
+        }
+        if (merchant.isBlank()) {
+            viewModelScope.launch { _eventFlow.emit(UiEvent.ShowSnackbar("Merchant/Description cannot be empty")) }
+            return
+        }
+        if (accountId == 0L) {
+            viewModelScope.launch { _eventFlow.emit(UiEvent.ShowSnackbar("Please select an account")) }
+            return
+        }
+        if (type == "Transfer" && toAccountId == null) {
+            viewModelScope.launch { _eventFlow.emit(UiEvent.ShowSnackbar("Please select a destination account")) }
+            return
+        }
+        if (type == "Transfer" && toAccountId == accountId) {
+            viewModelScope.launch { _eventFlow.emit(UiEvent.ShowSnackbar("Source and destination accounts must be different")) }
+            return
+        }
+
         viewModelScope.launch {
-            val transaction = Transaction(
-                id = id,
-                accountId = accountId,
-                toAccountId = toAccountId,
-                categoryId = categoryId,
-                amount = amount,
-                merchant = merchant,
-                type = type,
-                timestamp = timestamp
-            )
-            transactionRepository.saveTransaction(transaction)
+            try {
+                val transaction = Transaction(
+                    id = id,
+                    accountId = accountId,
+                    toAccountId = toAccountId,
+                    categoryId = categoryId,
+                    amount = amount,
+                    merchant = merchant,
+                    type = type,
+                    timestamp = timestamp
+                    // isReviewed will be true by default
+                )
+                transactionRepository.saveTransaction(transaction)
+                NotificationHelper.triggerBudgetCheck(getApplication())
+                _eventFlow.emit(UiEvent.Success)
+                _eventFlow.emit(UiEvent.ShowSnackbar(if (id == 0L) "Transaction saved" else "Transaction updated"))
+            } catch (e: Exception) {
+                _eventFlow.emit(UiEvent.ShowSnackbar("Error saving transaction: ${e.message}"))
+            }
         }
     }
 
     fun deleteTransaction(transaction: Transaction) {
         viewModelScope.launch {
-            deleteTransactionUseCase(transaction)
+            try {
+                deleteTransactionUseCase(transaction)
+                _eventFlow.emit(UiEvent.Success)
+                _eventFlow.emit(UiEvent.ShowSnackbar("Transaction deleted"))
+            } catch (e: Exception) {
+                _eventFlow.emit(UiEvent.ShowSnackbar("Error deleting transaction: ${e.message}"))
+            }
         }
     }
 
     fun updateTransactionCategory(transaction: Transaction, categoryId: Long?) {
         viewModelScope.launch {
             transactionRepository.saveTransaction(transaction.copy(categoryId = categoryId))
+            NotificationHelper.triggerBudgetCheck(getApplication())
         }
     }
 
-    fun updateTransactionAmount(transaction: Transaction, amount: Double) {
+    fun updateTransactionAmount(transaction: Transaction, amount: BigDecimal) {
         viewModelScope.launch {
             transactionRepository.saveTransaction(transaction.copy(amount = amount))
+            NotificationHelper.triggerBudgetCheck(getApplication())
+        }
+    }
+
+    fun markAsReviewed(id: Long) {
+        viewModelScope.launch {
+            transactionRepository.markAsReviewed(id)
+        }
+    }
+
+    fun deleteAllTransactions() {
+        viewModelScope.launch {
+            try {
+                transactionRepository.deleteAllTransactions()
+                _eventFlow.emit(UiEvent.ShowSnackbar("All transactions cleared"))
+            } catch (e: Exception) {
+                _eventFlow.emit(UiEvent.ShowSnackbar("Error clearing transactions: ${e.message}"))
+            }
         }
     }
 }

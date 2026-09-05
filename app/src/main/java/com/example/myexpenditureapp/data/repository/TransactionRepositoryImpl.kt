@@ -7,6 +7,7 @@ import com.example.myexpenditureapp.data.dao.TransactionDao
 import com.example.myexpenditureapp.data.entity.Transaction
 import com.example.myexpenditureapp.domain.repository.TransactionRepository
 import kotlinx.coroutines.flow.Flow
+import java.math.BigDecimal
 
 class TransactionRepositoryImpl(
     private val database: AppDatabase,
@@ -23,6 +24,12 @@ class TransactionRepositoryImpl(
         endDate: Long?,
         query: String?
     ): Flow<List<Transaction>> = transactionDao.getFilteredTransactions(accountId, categoryId, type, startDate, endDate, query)
+
+    override fun getUnreviewedTransactions(): Flow<List<Transaction>> = transactionDao.getUnreviewedTransactions()
+
+    override suspend fun markAsReviewed(id: Long) {
+        transactionDao.markAsReviewed(id)
+    }
 
     override suspend fun getTransactionById(id: Long): Transaction? = transactionDao.getTransactionById(id)
 
@@ -52,24 +59,36 @@ class TransactionRepositoryImpl(
     }
 
     private suspend fun adjustBalances(transaction: Transaction, multiplier: Int) {
+        val multiplierBigDecimal = BigDecimal(multiplier)
+        // Adjust primary account balance
         val account = accountDao.getAccountById(transaction.accountId)
         if (account != null) {
             val balanceChange = when (transaction.type) {
-                "Expense" -> -transaction.amount
+                "Expense" -> transaction.amount.negate()
                 "Income" -> transaction.amount
-                "Transfer" -> -transaction.amount
-                else -> 0.0
+                "Transfer" -> transaction.amount.negate()
+                else -> BigDecimal.ZERO
             }
-            accountDao.updateAccount(account.copy(balance = account.balance + (balanceChange * multiplier)))
+            val newBalance = account.balance.add(balanceChange.multiply(multiplierBigDecimal))
+            accountDao.updateAccount(account.copy(balance = newBalance))
         }
 
+        // Adjust destination account balance for Transfers
         if (transaction.type == "Transfer" && transaction.toAccountId != null) {
             val toAccount = accountDao.getAccountById(transaction.toAccountId)
             if (toAccount != null) {
-                accountDao.updateAccount(toAccount.copy(balance = toAccount.balance + (transaction.amount * multiplier)))
+                val newToBalance = toAccount.balance.add(transaction.amount.multiply(multiplierBigDecimal))
+                accountDao.updateAccount(toAccount.copy(balance = newToBalance))
             }
         }
     }
 
     override suspend fun existsBySmsId(smsId: String): Boolean = transactionDao.existsBySmsId(smsId)
+
+    override suspend fun deleteAllTransactions() {
+        database.withTransaction {
+            transactionDao.deleteAllTransactions()
+            accountDao.resetAllBalances()
+        }
+    }
 }

@@ -8,6 +8,8 @@ import com.example.myexpenditureapp.domain.model.BudgetWithProgress
 import com.example.myexpenditureapp.domain.repository.BudgetRepository
 import kotlinx.coroutines.flow.*
 import java.util.*
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 class BudgetRepositoryImpl(
     private val budgetDao: BudgetDao,
@@ -15,35 +17,46 @@ class BudgetRepositoryImpl(
     private val transactionDao: TransactionDao
 ) : BudgetRepository {
 
-    override fun getBudgetsWithProgress(): Flow<List<BudgetWithProgress>> {
+    override fun getAllBudgets(month: Int?, year: Int?): Flow<List<Budget>> {
+        return if (month != null && year != null) {
+            budgetDao.getBudgetsForMonth(month, year)
+        } else {
+            budgetDao.getAllBudgets()
+        }
+    }
+
+    override fun getBudgetsWithProgress(month: Int, year: Int): Flow<List<BudgetWithProgress>> {
         return combine(
-            budgetDao.getAllBudgets(),
+            budgetDao.getBudgetsForMonth(month, year),
             categoryDao.getAllCategories(),
             transactionDao.getAllTransactions()
         ) { budgets, categories, transactions ->
             val calendar = Calendar.getInstance()
-            calendar.set(Calendar.DAY_OF_MONTH, 1)
-            calendar.set(Calendar.HOUR_OF_DAY, 0)
-            calendar.set(Calendar.MINUTE, 0)
-            calendar.set(Calendar.SECOND, 0)
+            calendar.set(year, month - 1, 1, 0, 0, 0)
             calendar.set(Calendar.MILLISECOND, 0)
             val startOfMonth = calendar.timeInMillis
+            
+            calendar.set(year, month - 1, calendar.getActualMaximum(Calendar.DAY_OF_MONTH), 23, 59, 59)
+            calendar.set(Calendar.MILLISECOND, 999)
+            val endOfMonth = calendar.timeInMillis
 
             budgets.map { budget ->
                 val category = categories.find { it.id == budget.categoryId }
                 val currentSpending = transactions
                     .filter { 
                         it.categoryId == budget.categoryId && 
-                        it.timestamp >= startOfMonth && 
+                        it.timestamp in startOfMonth..endOfMonth && 
                         it.type == "Expense" 
                     }
-                    .sumOf { it.amount }
+                    .fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) }
                 
                 BudgetWithProgress(
                     budget = budget,
                     category = category,
                     currentSpending = currentSpending,
-                    progress = if (budget.limitAmount > 0) (currentSpending / budget.limitAmount).toFloat() else 0f
+                    progress = if (budget.limitAmount > BigDecimal.ZERO) 
+                        currentSpending.divide(budget.limitAmount, 4, RoundingMode.HALF_UP).toFloat() 
+                    else 0f
                 )
             }
         }
