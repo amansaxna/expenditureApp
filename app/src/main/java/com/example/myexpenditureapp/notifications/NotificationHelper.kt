@@ -75,14 +75,21 @@ object NotificationHelper {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
+        val bigTextStyle = NotificationCompat.BigTextStyle()
+            .setBigContentTitle("New Transaction: $merchant")
+            .bigText("₹$amount was captured from SMS/UPI.\nTap to review and assign category or save as rule.")
+            .setSummaryText("Smart Inbox")
+
         val builder = NotificationCompat.Builder(context, CHANNEL_REVIEW)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("Review Required")
-            .setContentText("New transaction at $merchant: ₹$amount")
+            .setContentTitle("Review Required: $merchant")
+            .setContentText("₹$amount • Tap to review category")
+            .setStyle(bigTextStyle)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingIntent)
+            .addAction(R.drawable.ic_launcher_foreground, "Open Review", pendingIntent)
             .setAutoCancel(true)
-            .setColor(0xFFFBBF24.toInt()) // Gold
+            .setColor(0xFFFBBF24.toInt()) // Gold Accent
 
         try {
             NotificationManagerCompat.from(context).notify(200, builder.build())
@@ -94,13 +101,28 @@ object NotificationHelper {
     fun showBudgetAlert(context: Context, categoryName: String, percent: Int) {
         if (!hasPostNotificationPermission(context)) return
 
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context, 101, intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val bigTextStyle = NotificationCompat.BigTextStyle()
+            .setBigContentTitle("⚠️ Budget Limit Alert: $categoryName")
+            .bigText("You have reached $percent% of your monthly budget limit for $categoryName.\nConsider pacing your expenses.")
+            .setSummaryText("Budget Guard")
+
         val builder = NotificationCompat.Builder(context, CHANNEL_BUDGET)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("Budget Alert: $categoryName")
+            .setContentTitle("Budget Alert: $categoryName ($percent%)")
             .setContentText("You've reached $percent% of your budget for $categoryName.")
+            .setStyle(bigTextStyle)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
             .setAutoCancel(true)
-            .setColor(0xFFEF4444.toInt()) // Red
+            .setColor(0xFFF43F5E.toInt()) // Expense Red
 
         try {
             NotificationManagerCompat.from(context).notify(categoryName.hashCode(), builder.build())
@@ -112,13 +134,28 @@ object NotificationHelper {
     fun showDailyReflection(context: Context, todaySpend: String, monthlyNetFlow: String) {
         if (!hasPostNotificationPermission(context)) return
 
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context, 102, intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val bigTextStyle = NotificationCompat.BigTextStyle()
+            .setBigContentTitle("🌙 Daily Spending Reflection")
+            .bigText("Today's Total Outflow: ₹$todaySpend\nMonth-to-Date Net Flow: ₹$monthlyNetFlow\nKeep track of your financial habits!")
+            .setSummaryText("Daily Summary")
+
         val builder = NotificationCompat.Builder(context, CHANNEL_DAILY)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle("Daily Reflection")
-            .setContentText("Today's Spend: ₹$todaySpend | Month Net: ₹$monthlyNetFlow")
+            .setContentText("Today: ₹$todaySpend | Net Month: ₹$monthlyNetFlow")
+            .setStyle(bigTextStyle)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
             .setAutoCancel(true)
-            .setColor(0xFF3B82F6.toInt()) // Blue
+            .setColor(0xFF6366F1.toInt()) // Indigo Primary
 
         try {
             NotificationManagerCompat.from(context).notify(300, builder.build())
@@ -130,13 +167,28 @@ object NotificationHelper {
     fun showMonthlySummary(context: Context, netFlow: String) {
         if (!hasPostNotificationPermission(context)) return
 
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context, 103, intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val bigTextStyle = NotificationCompat.BigTextStyle()
+            .setBigContentTitle("🎉 Monthly Financial Victory!")
+            .bigText("You closed the month with a net savings flow of ₹$netFlow.\nGreat discipline! Keep building your wealth.")
+            .setSummaryText("Monthly Report")
+
         val builder = NotificationCompat.Builder(context, CHANNEL_MONTHLY)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("Monthly Victory!")
-            .setContentText("Great month! Your net flow was ₹$netFlow. Keep it up!")
+            .setContentTitle("Monthly Victory: ₹$netFlow")
+            .setContentText("Great month! Your net flow was ₹$netFlow.")
+            .setStyle(bigTextStyle)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
             .setAutoCancel(true)
-            .setColor(0xFF10B981.toInt()) // Green
+            .setColor(0xFF10B981.toInt()) // Income Green
 
         try {
             NotificationManagerCompat.from(context).notify(400, builder.build())
@@ -194,5 +246,13 @@ object NotificationHelper {
         val workManager = WorkManager.getInstance(context)
         val budgetRequest = OneTimeWorkRequestBuilder<BudgetWorker>().build()
         workManager.enqueue(budgetRequest)
+    }
+
+    fun isNotificationListenerAccessGranted(context: Context): Boolean {
+        val packageName = context.packageName
+        val flat = android.provider.Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+        val isEnabledInSettings = flat != null && flat.contains(packageName)
+        val isEnabledInCompat = NotificationManagerCompat.getEnabledListenerPackages(context).contains(packageName)
+        return isEnabledInSettings || isEnabledInCompat
     }
 }

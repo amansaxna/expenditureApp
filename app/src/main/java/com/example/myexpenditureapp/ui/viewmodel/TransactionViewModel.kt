@@ -137,7 +137,9 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
         merchant: String,
         type: String,
         timestamp: Long = System.currentTimeMillis(),
-        id: Long = 0L
+        id: Long = 0L,
+        tags: List<String> = emptyList(),
+        saveAsRule: Boolean = false
     ) {
         if (amount <= BigDecimal.ZERO) {
             viewModelScope.launch { _eventFlow.emit(UiEvent.ShowSnackbar("Amount must be greater than zero")) }
@@ -170,10 +172,26 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
                     amount = amount,
                     merchant = merchant,
                     type = type,
-                    timestamp = timestamp
-                    // isReviewed will be true by default
+                    timestamp = timestamp,
+                    isReviewed = true,
+                    tags = tags
                 )
                 transactionRepository.saveTransaction(transaction)
+
+                if (saveAsRule && categoryId != null && merchant.isNotBlank()) {
+                    try {
+                        Graph.autoCategoryRuleRepository.saveRule(
+                            com.example.myexpenditureapp.data.entity.AutoCategoryRule(
+                                keyword = merchant.trim().uppercase(),
+                                categoryId = categoryId,
+                                matchType = "CONTAINS"
+                            )
+                        )
+                    } catch (e: Exception) {
+                        // ignore duplicate rule errors
+                    }
+                }
+
                 NotificationHelper.triggerBudgetCheck(getApplication())
                 _eventFlow.emit(UiEvent.Success)
                 _eventFlow.emit(UiEvent.ShowSnackbar(if (id == 0L) "Transaction saved" else "Transaction updated"))
@@ -212,6 +230,30 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
     fun markAsReviewed(id: Long) {
         viewModelScope.launch {
             transactionRepository.markAsReviewed(id)
+        }
+    }
+
+    fun reviewTransaction(transactionId: Long, categoryId: Long? = null, saveAsRule: Boolean = false) {
+        viewModelScope.launch {
+            val tx = transactionRepository.getTransactionById(transactionId) ?: return@launch
+            val updated = tx.copy(categoryId = categoryId ?: tx.categoryId, isReviewed = true)
+            transactionRepository.saveTransaction(updated)
+            if (saveAsRule && categoryId != null && tx.merchant.isNotBlank()) {
+                try {
+                    Graph.autoCategoryRuleRepository.saveRule(
+                        com.example.myexpenditureapp.data.entity.AutoCategoryRule(
+                            keyword = tx.merchant.trim().uppercase(),
+                            categoryId = categoryId,
+                            matchType = "CONTAINS"
+                        )
+                    )
+                } catch (e: Exception) {
+                    // ignore
+                }
+            }
+            NotificationHelper.triggerBudgetCheck(getApplication())
+            _eventFlow.emit(UiEvent.ShowSnackbar("Transaction reviewed!"))
+            _eventFlow.emit(UiEvent.Success)
         }
     }
 

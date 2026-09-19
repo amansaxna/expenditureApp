@@ -44,5 +44,7 @@ data class Transaction(
     val timestamp: Long,
     val type: String, // "Income", "Expense", "Transfer"
     val smsId: String? = null,
-    val isReviewed: Boolean = true
+    val isReviewed: Boolean = true,
+    val tags: List<String> = emptyList(),
+    val rawMessage: String? = null
 )

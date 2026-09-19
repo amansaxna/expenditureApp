@@ -4,10 +4,14 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.unit.sp
+import androidx.compose.material3.ripple
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.filled.*
@@ -21,6 +25,9 @@ import androidx.compose.material3.adaptive.navigation3.rememberListDetailSceneSt
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -67,12 +74,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val isQuickAddLaunched = mutableStateOf(false)
+
     @OptIn(ExperimentalMaterial3AdaptiveApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Graph.provide(this)
         enableEdgeToEdge()
         
+        if (intent?.getStringExtra("ACTION") == "quick_add" || intent?.action == "com.example.myexpenditureapp.QUICK_ADD") {
+            isQuickAddLaunched.value = true
+        }
+
         NotificationHelper.createNotificationChannels(this)
         NotificationHelper.scheduleWorkers(this)
 
@@ -87,14 +100,22 @@ class MainActivity : ComponentActivity() {
         requestPermissionLauncher.launch(permissions.toTypedArray())
 
         setContent {
-            MainScreen()
+            MainScreen(openQuickAdd = isQuickAddLaunched.value)
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getStringExtra("ACTION") == "quick_add" || intent.action == "com.example.myexpenditureapp.QUICK_ADD") {
+            isQuickAddLaunched.value = true
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-fun MainScreen() {
+fun MainScreen(openQuickAdd: Boolean = false) {
     val themeViewModel: ThemeViewModel = viewModel()
     val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
     val backStack = rememberNavBackStack(Route.AccountList)
@@ -103,56 +124,33 @@ fun MainScreen() {
     )
     val snackbarHostState = remember { SnackbarHostState() }
 
+    LaunchedEffect(openQuickAdd) {
+        if (openQuickAdd && backStack.lastOrNull() !is Route.TransactionEdit) {
+            backStack.add(Route.TransactionEdit())
+        }
+    }
+
     MyExpenditureAppTheme(themeMode = themeMode) {
+        val haptic = LocalHapticFeedback.current
+        val currentRoute = backStack.lastOrNull()
+        val isTopLevelRoute = currentRoute is Route.AccountList ||
+                currentRoute is Route.TransactionList ||
+                currentRoute is Route.Analytics ||
+                currentRoute is Route.Settings
+
         Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
             snackbarHost = { SnackbarHost(snackbarHostState) },
             bottomBar = {
-                NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 8.dp
-                ) {
-                    val currentRoute = backStack.lastOrNull()
-                    
-                    val items = listOf(
-                        NavigationItem("Accounts", Icons.Default.AccountBalance, Icons.Outlined.AccountBalance, Route.AccountList),
-                        NavigationItem("Categories", Icons.Default.Category, Icons.Outlined.Category, Route.CategoryList),
-                        NavigationItem("Transactions", Icons.AutoMirrored.Filled.ReceiptLong, Icons.AutoMirrored.Outlined.ReceiptLong, Route.TransactionList),
-                        NavigationItem("Budgets", Icons.Default.Payments, Icons.Outlined.Payments, Route.BudgetList),
-                        NavigationItem("Analytics", Icons.Default.Analytics, Icons.Outlined.Analytics, Route.Analytics)
-                    )
-
-                    items.forEach { item ->
-                        val isSelected = when (item.route) {
-                            is Route.AccountList -> currentRoute is Route.AccountList || currentRoute is Route.AccountEdit || currentRoute is Route.TransactionReview
-                            is Route.CategoryList -> currentRoute is Route.CategoryList || currentRoute is Route.CategoryEdit
-                            is Route.TransactionList -> currentRoute is Route.TransactionList || currentRoute is Route.TransactionEdit
-                            is Route.BudgetList -> currentRoute is Route.BudgetList || currentRoute is Route.BudgetEdit
-                            is Route.Analytics -> currentRoute is Route.Analytics
-                            else -> false
+                if (isTopLevelRoute) {
+                    AppBottomNavBar(
+                        currentRoute = currentRoute,
+                        onItemSelected = { route ->
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            backStack.clear()
+                            backStack.add(route)
                         }
-                        
-                        NavigationBarItem(
-                            selected = isSelected,
-                            onClick = { 
-                                if (!isSelected) {
-                                    backStack.clear()
-                                    backStack.add(item.route)
-                                }
-                            },
-                            icon = { 
-                                Icon(
-                                    imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon, 
-                                    contentDescription = item.label 
-                                ) 
-                            },
-                            label = { Text(item.label, style = MaterialTheme.typography.labelSmall) },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                unselectedIconColor = MaterialTheme.colorScheme.outline,
-                                indicatorColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                            )
-                        )
-                    }
+                    )
                 }
             }
         ) { innerPadding ->
@@ -160,7 +158,9 @@ fun MainScreen() {
                 backStack = backStack,
                 onBack = { backStack.removeLastOrNull() },
                 sceneStrategy = listDetailStrategy,
-                modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = innerPadding.calculateBottomPadding()),
                 entryProvider = entryProvider {
                     entry<Route.AccountList>(
                         metadata = ListDetailSceneStrategy.listPane(
@@ -180,7 +180,8 @@ fun MainScreen() {
                             budgetViewModel = budgetViewModel,
                             onAddAccount = { backStack.add(Route.AccountEdit()) },
                             onEditAccount = { backStack.add(Route.AccountEdit(it.id)) },
-                            onReviewTransaction = { backStack.add(Route.TransactionReview(it.id)) }
+                            onReviewTransaction = { backStack.add(Route.TransactionReview(it.id)) },
+                            onOpenGoals = { backStack.add(Route.GoalList) }
                         )
                     }
                     entry<Route.AccountEdit>(
@@ -214,6 +215,8 @@ fun MainScreen() {
                         metadata = ListDetailSceneStrategy.detailPane()
                     ) { route ->
                         val viewModel: TransactionViewModel = viewModel()
+                        val categoryViewModel: CategoryViewModel = viewModel()
+                        val categories by categoryViewModel.allCategories.collectAsStateWithLifecycle()
                         var transaction by remember(route.transactionId) { mutableStateOf<Transaction?>(null) }
                         LaunchedEffect(route.transactionId) {
                             transaction = viewModel.getTransactionById(route.transactionId)
@@ -222,8 +225,13 @@ fun MainScreen() {
                         transaction?.let {
                             TransactionReviewScreen(
                                 transaction = it,
-                                onMarkAsReviewed = { 
-                                    viewModel.markAsReviewed(it.id)
+                                categories = categories,
+                                onMarkAsReviewed = { catId, saveAsRule ->
+                                    viewModel.reviewTransaction(it.id, catId, saveAsRule)
+                                    backStack.removeLastOrNull()
+                                },
+                                onDelete = { tx ->
+                                    viewModel.deleteTransaction(tx)
                                     backStack.removeLastOrNull()
                                 },
                                 onBack = { backStack.removeLastOrNull() }
@@ -317,8 +325,8 @@ fun MainScreen() {
                                 transaction = transactionToEdit,
                                 accounts = uiState.accounts,
                                 categories = uiState.categories,
-                                onSave = { accId, toAccId, catId, amt, merch, type, time, id ->
-                                    viewModel.saveTransaction(accId, toAccId, catId, amt, merch, type, time, id)
+                                onSave = { accId, toAccId, catId, amt, merch, type, time, id, tags, saveAsRule ->
+                                    viewModel.saveTransaction(accId, toAccId, catId, amt, merch, type, time, id, tags, saveAsRule)
                                 },
                                 onDelete = {
                                     viewModel.deleteTransaction(it)
@@ -382,8 +390,127 @@ fun MainScreen() {
                         val viewModel: AnalyticsViewModel = viewModel()
                         AnalyticsScreen(viewModel = viewModel)
                     }
+                    entry<Route.Settings>(
+                        metadata = ListDetailSceneStrategy.listPane()
+                    ) {
+                        val themeViewModel: ThemeViewModel = viewModel()
+                        SettingsScreen(
+                            viewModel = themeViewModel,
+                            onNavigateToRules = { backStack.add(Route.AutoCategoryRuleList) },
+                            onNavigateToGoals = { backStack.add(Route.GoalList) },
+                            onNavigateToCategories = { backStack.add(Route.CategoryList) },
+                            onNavigateToSubscriptions = { backStack.add(Route.SubscriptionList) }
+                        )
+                    }
+                    entry<Route.GoalList>(
+                        metadata = ListDetailSceneStrategy.listPane()
+                    ) {
+                        val goalViewModel: GoalViewModel = viewModel()
+                        GoalListScreen(
+                            viewModel = goalViewModel,
+                            onBack = { backStack.removeLastOrNull() }
+                        )
+                    }
+                    entry<Route.AutoCategoryRuleList>(
+                        metadata = ListDetailSceneStrategy.listPane()
+                    ) {
+                        val ruleViewModel: AutoCategoryRuleViewModel = viewModel()
+                        AutoCategoryRuleListScreen(
+                            viewModel = ruleViewModel,
+                            onBack = { backStack.removeLastOrNull() }
+                        )
+                    }
+                    entry<Route.SubscriptionList>(
+                        metadata = ListDetailSceneStrategy.listPane()
+                    ) {
+                        SubscriptionListScreen(
+                            onNavigateBack = { backStack.removeLastOrNull() }
+                        )
+                    }
                 }
             )
+        }
+    }
+}
+
+@Composable
+fun AppBottomNavBar(
+    currentRoute: NavKey?,
+    onItemSelected: (NavKey) -> Unit
+) {
+    val items = remember {
+        listOf(
+            NavigationItem("Home", Icons.Default.Dashboard, Icons.Outlined.Dashboard, Route.AccountList),
+            NavigationItem("Transactions", Icons.AutoMirrored.Filled.ReceiptLong, Icons.AutoMirrored.Outlined.ReceiptLong, Route.TransactionList),
+            NavigationItem("Analytics", Icons.Default.Analytics, Icons.Outlined.Analytics, Route.Analytics),
+            NavigationItem("Settings", Icons.Default.Settings, Icons.Outlined.Settings, Route.Settings)
+        )
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.background,
+        tonalElevation = 0.dp,
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            items.forEach { item ->
+                val isSelected = when (item.route) {
+                    is Route.AccountList -> currentRoute is Route.AccountList
+                    is Route.TransactionList -> currentRoute is Route.TransactionList
+                    is Route.Analytics -> currentRoute is Route.Analytics
+                    is Route.Settings -> currentRoute is Route.Settings
+                    else -> false
+                }
+                
+                val iconColor by animateColorAsState(
+                    targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                    label = "navIconColor"
+                )
+                val textColor by animateColorAsState(
+                    targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+                    label = "navTextColor"
+                )
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = ripple(bounded = false, radius = 24.dp)
+                        ) {
+                            if (!isSelected) onItemSelected(item.route)
+                        }
+                        .padding(vertical = 2.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
+                        contentDescription = item.label,
+                        tint = iconColor,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = item.label,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 10.sp,
+                            letterSpacing = (-0.2).sp
+                        ),
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = textColor,
+                        maxLines = 1
+                    )
+                }
+            }
         }
     }
 }

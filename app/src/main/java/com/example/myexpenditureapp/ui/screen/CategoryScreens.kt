@@ -1,5 +1,11 @@
 package com.example.myexpenditureapp.ui.screen
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -19,11 +25,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.myexpenditureapp.data.entity.Category
+import com.example.myexpenditureapp.ui.theme.*
 import com.example.myexpenditureapp.ui.viewmodel.CategoryViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -31,7 +39,8 @@ import com.example.myexpenditureapp.ui.viewmodel.CategoryViewModel
 fun CategoryListScreen(
     viewModel: CategoryViewModel,
     onAddCategory: (Long?) -> Unit,
-    onEditCategory: (Category) -> Unit
+    onEditCategory: (Category) -> Unit,
+    onBack: () -> Unit = {}
 ) {
     val rootCategories by viewModel.rootCategories.collectAsState()
     val allCategories by viewModel.allCategories.collectAsState()
@@ -39,30 +48,49 @@ fun CategoryListScreen(
 
     Scaffold(
         topBar = { 
-            CenterAlignedTopAppBar(title = { Text("Categories", style = MaterialTheme.typography.titleLarge) }) 
+            CenterAlignedTopAppBar(
+                title = { 
+                    Text(
+                        "CATEGORIES & TAGS", 
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 1.sp
+                    ) 
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground
+                )
+            ) 
         },
         floatingActionButton = {
-            SmallFloatingActionButton(
+            ExtendedFloatingActionButton(
                 onClick = { 
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     onAddCategory(null) 
                 },
+                icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                text = { Text("New Category", fontWeight = FontWeight.Bold) },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Category")
-            }
-        }
+                shape = RoundedCornerShape(16.dp)
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(top = 4.dp, bottom = 12.dp, start = 12.dp, end = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(rootCategories) { category ->
+            items(rootCategories, key = { it.id }) { category ->
                 val subcategories = allCategories.filter { it.parentId == category.id }
                 CategoryHierarchyItem(
                     category = category,
@@ -86,107 +114,140 @@ fun CategoryHierarchyItem(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    Column {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .clickable { onEdit(category) },
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-        ) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp)),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
             Row(
                 modifier = Modifier
-                    .padding(2.dp)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable { onEdit(category) }
+                    .padding(vertical = 4.dp, horizontal = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(32.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    IconButton(
+                        onClick = { expanded = !expanded }, 
+                        modifier = Modifier.size(36.dp)
+                    ) {
                         Icon(
                             if (expanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
                             contentDescription = "Toggle",
-                            modifier = Modifier.size(16.dp),
+                            modifier = Modifier.size(20.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
-                    if (category.icon != null) {
+
+                    Surface(
+                        modifier = Modifier.size(44.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                category.icon ?: "📁",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column {
                         Text(
-                            category.icon,
-                            modifier = Modifier.padding(start = 8.dp),
-                            style = MaterialTheme.typography.titleLarge
+                            category.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
+                        if (subcategories.isNotEmpty()) {
+                            Text(
+                                "${subcategories.size} sub-categories",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
-                    Text(
-                        category.name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(start = if (category.icon != null) 8.dp else 0.dp)
-                    )
                 }
-                Row {
-                    IconButton(onClick = onAddSub, modifier = Modifier.size(32.dp)) {
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onAddSub, modifier = Modifier.size(36.dp)) {
                         Icon(
-                            Icons.Default.AddCircleOutline, 
+                            Icons.Default.Add, 
                             contentDescription = "Add Subcategory",
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
-                    IconButton(onClick = { onDelete(category) }, modifier = Modifier.size(32.dp)) {
+                    IconButton(onClick = { onEdit(category) }, modifier = Modifier.size(36.dp)) {
                         Icon(
-                            Icons.Default.DeleteOutline,
-                            contentDescription = "Delete",
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
+                            Icons.Default.Edit,
+                            contentDescription = "Edit Category",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             }
-        }
 
-        if (expanded) {
-            Column(modifier = Modifier.padding(start = 24.dp, top = 1.dp)) {
-                subcategories.forEach { sub ->
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 1.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { onEdit(sub) },
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
-                    ) {
-                        Row(
+            AnimatedVisibility(
+                visible = expanded && subcategories.isNotEmpty(),
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(start = 36.dp, top = 8.dp, bottom = 4.dp, end = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    subcategories.forEach { sub ->
+                        Surface(
                             modifier = Modifier
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                                .fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { onEdit(sub) },
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                if (sub.icon != null) {
+                            Row(
+                                modifier = Modifier
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                                    .fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically, 
+                                    modifier = Modifier.weight(1f)
+                                ) {
                                     Text(
-                                        sub.icon,
-                                        modifier = Modifier.padding(end = 12.dp),
-                                        style = MaterialTheme.typography.bodyLarge
+                                        sub.icon ?: "🏷️",
+                                        modifier = Modifier.padding(end = 10.dp),
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                    Text(
+                                        sub.name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
                                 }
-                                Text(
-                                    sub.name,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Normal
-                                )
-                            }
-                            IconButton(
-                                onClick = { onDelete(sub) },
-                                modifier = Modifier.size(24.dp)
-                            ) {
                                 Icon(
-                                    Icons.Default.RemoveCircleOutline,
-                                    contentDescription = "Delete",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.outline
+                                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                    contentDescription = "Edit Subcategory",
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -221,7 +282,12 @@ fun CategoryEditScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (category == null) "Add Category" else "Edit Category") },
+                title = { 
+                    Text(
+                        if (category == null) "New Category" else "Edit Category",
+                        fontWeight = FontWeight.ExtraBold
+                    ) 
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -233,9 +299,13 @@ fun CategoryEditScreen(
                             Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
                         }
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
             )
-        }
+        },
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(
             modifier = Modifier
@@ -243,48 +313,60 @@ fun CategoryEditScreen(
                 .padding(16.dp)
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-                shape = RoundedCornerShape(16.dp)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(80.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center
+                    Surface(
+                        modifier = Modifier.size(80.dp),
+                        shape = RoundedCornerShape(24.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                        border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f))
                     ) {
-                        Text(emoji, style = MaterialTheme.typography.displayMedium)
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(emoji, style = MaterialTheme.typography.displayMedium)
+                        }
                     }
                     
                     Spacer(modifier = Modifier.height(16.dp))
                     
-                    Text("Select Emoji", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "CHOOSE ICON", 
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = 1.sp
+                    )
                     
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Center,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         emojis.forEach { e ->
-                            Box(
+                            Surface(
                                 modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .clickable { emoji = e }
-                                    .background(if (emoji == e) MaterialTheme.colorScheme.primary else Color.Transparent),
-                                contentAlignment = Alignment.Center
+                                    .padding(horizontal = 4.dp)
+                                    .size(44.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { emoji = e },
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (emoji == e) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                border = if (emoji == e) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
                             ) {
-                                Text(e, style = MaterialTheme.typography.titleLarge)
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(e, style = MaterialTheme.typography.titleLarge)
+                                }
                             }
                         }
                     }
@@ -294,13 +376,13 @@ fun CategoryEditScreen(
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Category Name") },
+                label = { Text("Category Name (e.g. Dining, Subscriptions)") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(16.dp)
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Button(
                 onClick = {
@@ -328,7 +410,7 @@ fun CategoryEditScreen(
     if (showDeleteDialog && category != null) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Delete Category") },
+            title = { Text("Delete Category", fontWeight = FontWeight.Bold) },
             text = { Text("Are you sure? Subcategories and associated transactions will be affected.") },
             confirmButton = {
                 TextButton(
@@ -338,7 +420,7 @@ fun CategoryEditScreen(
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Delete")
+                    Text("Delete", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {

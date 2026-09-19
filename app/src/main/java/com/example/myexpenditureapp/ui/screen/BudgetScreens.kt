@@ -55,17 +55,17 @@ fun BudgetListScreen(
                     ) 
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = NavyDeep,
-                    titleContentColor = OffWhite
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground
                 )
             ) 
         },
-        containerColor = NavyDeep,
+        containerColor = MaterialTheme.colorScheme.background,
         floatingActionButton = {
             SmallFloatingActionButton(
                 onClick = onAddBudget,
-                containerColor = AccentVibrant,
-                contentColor = Color.White,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add Budget")
@@ -104,18 +104,18 @@ fun BudgetListScreen(
                                 Icons.Default.Payments,
                                 contentDescription = null,
                                 modifier = Modifier.size(80.dp),
-                                tint = Slate.copy(alpha = 0.3f)
+                                tint = MaterialTheme.colorScheme.outlineVariant
                             )
                             Spacer(modifier = Modifier.height(24.dp))
                             Text(
                                 "No budgets for this month",
                                 style = MaterialTheme.typography.headlineSmall,
-                                color = OffWhite
+                                color = MaterialTheme.colorScheme.onBackground
                             )
                             Text(
                                 "Plan your spending for ${getMonthName(selectedMonth)} $selectedYear",
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = Slate
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -144,12 +144,12 @@ fun MonthPicker(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp, vertical = 4.dp)
     ) {
         Row(
             modifier = Modifier
                 .horizontalScroll(scrollState)
-                .padding(vertical = 8.dp),
+                .padding(vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             months.forEach { month ->
@@ -157,18 +157,8 @@ fun MonthPicker(
                 FilterChip(
                     selected = isSelected,
                     onClick = { onMonthYearSelected(month, selectedYear) },
-                    label = { Text(getMonthName(month, true)) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = AccentVibrant,
-                        selectedLabelColor = Color.White,
-                        containerColor = NavyLight,
-                        labelColor = Slate
-                    ),
-                    border = FilterChipDefaults.filterChipBorder(
-                        enabled = true,
-                        selected = isSelected,
-                        borderColor = if (isSelected) AccentVibrant else NavyAccent
-                    )
+                    label = { Text(getMonthName(month, true), fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                    shape = RoundedCornerShape(14.dp)
                 )
             }
         }
@@ -180,19 +170,19 @@ fun MonthlyStatusSummary(passed: Int, failed: Int) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         StatusCard(
-            label = "PASSED",
+            label = "ON TRACK",
             count = passed,
-            color = AccentSuccess,
+            color = IncomeGreen,
             modifier = Modifier.weight(1f)
         )
         StatusCard(
-            label = "FAILED",
+            label = "OVER LIMIT",
             count = failed,
-            color = AccentError,
+            color = ExpenseRed,
             modifier = Modifier.weight(1f)
         )
     }
@@ -202,13 +192,13 @@ fun MonthlyStatusSummary(passed: Int, failed: Int) {
 fun StatusCard(label: String, count: Int, color: Color, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = NavyLight),
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, NavyAccent.copy(alpha = 0.3f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.35f))
     ) {
         Row(
             modifier = Modifier
-                .padding(12.dp)
+                .padding(14.dp)
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
@@ -217,22 +207,32 @@ fun StatusCard(label: String, count: Int, color: Color, modifier: Modifier = Mod
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelSmall,
-                    color = Slate,
-                    fontWeight = FontWeight.Bold
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 0.5.sp
                 )
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "$count Budgets",
+                    text = "$count Categories",
                     style = MaterialTheme.typography.titleMedium,
-                    color = OffWhite,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.ExtraBold
                 )
             }
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(color)
-            )
+            Surface(
+                shape = CircleShape,
+                color = color.copy(alpha = 0.15f),
+                modifier = Modifier.size(28.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(color)
+                    )
+                }
+            }
         }
     }
 }
@@ -242,38 +242,76 @@ fun BudgetCard(
     budgetProgress: BudgetWithProgress,
     onClick: () -> Unit
 ) {
+    val pct = (budgetProgress.progress * 100f).toInt()
     val isOver = budgetProgress.progress > 1f
+    val isWarning = budgetProgress.progress in 0.8f..1f
+
+    val gaugeColor = when {
+        isOver -> ExpenseRed
+        isWarning -> AmberWarning
+        else -> IncomeGreen
+    }
+
+    val remaining = budgetProgress.budget.limitAmount.subtract(budgetProgress.currentSpending)
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(22.dp))
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = NavyLight),
-        border = BorderStroke(1.dp, if (isOver) AccentError.copy(alpha = 0.3f) else NavyAccent.copy(alpha = 0.3f))
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        border = BorderStroke(1.dp, gaugeColor.copy(alpha = 0.35f))
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(18.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = budgetProgress.category?.name ?: "Unknown",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = OffWhite
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        modifier = Modifier.size(40.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        color = gaugeColor.copy(alpha = 0.12f),
+                        border = BorderStroke(1.dp, gaugeColor.copy(alpha = 0.25f))
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            if (budgetProgress.category?.icon != null) {
+                                Text(budgetProgress.category.icon, fontSize = 20.sp)
+                            } else {
+                                Icon(Icons.Default.Category, contentDescription = null, tint = gaugeColor, modifier = Modifier.size(20.dp))
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = budgetProgress.category?.name ?: "General",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = if (remaining >= BigDecimal.ZERO) "₹${remaining.setScale(0, RoundingMode.HALF_UP)} left" 
+                                   else "₹${remaining.negate().setScale(0, RoundingMode.HALF_UP)} exceeded",
+                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = MonospaceFont),
+                            color = if (remaining >= BigDecimal.ZERO) MaterialTheme.colorScheme.onSurfaceVariant else ExpenseRed
+                        )
+                    }
+                }
+
                 Surface(
-                    color = if (isOver) AccentError.copy(alpha = 0.1f) else AccentSuccess.copy(alpha = 0.1f),
-                    shape = RoundedCornerShape(8.dp)
+                    color = gaugeColor.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, gaugeColor.copy(alpha = 0.3f))
                 ) {
                     Text(
-                        text = if (isOver) "FAILED" else "PASSED",
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        text = "$pct%",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                         style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Black,
-                        color = if (isOver) AccentError else AccentSuccess
+                        fontWeight = FontWeight.ExtraBold,
+                        color = gaugeColor
                     )
                 }
             }
@@ -286,8 +324,8 @@ fun BudgetCard(
                     .fillMaxWidth()
                     .height(8.dp)
                     .clip(CircleShape),
-                color = if (isOver) AccentError else AccentVibrant,
-                trackColor = NavyLighter
+                color = gaugeColor,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant
             )
             
             Spacer(modifier = Modifier.height(12.dp))
@@ -297,24 +335,18 @@ fun BudgetCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text("SPENT", style = MaterialTheme.typography.labelSmall, color = Slate)
-                    Text(
-                        "₹${budgetProgress.currentSpending.setScale(0, RoundingMode.HALF_UP)}",
-                        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = MonospaceFont),
-                        fontWeight = FontWeight.Bold,
-                        color = OffWhite
-                    )
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text("BUDGET", style = MaterialTheme.typography.labelSmall, color = Slate)
-                    Text(
-                        "₹${budgetProgress.budget.limitAmount.setScale(0, RoundingMode.HALF_UP)}",
-                        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = MonospaceFont),
-                        fontWeight = FontWeight.Bold,
-                        color = OffWhite
-                    )
-                }
+                Text(
+                    text = "Spent: ₹${budgetProgress.currentSpending.setScale(0, RoundingMode.HALF_UP)}",
+                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = MonospaceFont),
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Limit: ₹${budgetProgress.budget.limitAmount.setScale(0, RoundingMode.HALF_UP)}",
+                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = MonospaceFont),
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
@@ -346,18 +378,18 @@ fun BudgetEditScreen(
                 actions = {
                     if (budget != null) {
                         IconButton(onClick = { showDeleteDialog = true }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = AccentError)
+                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
                         }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = NavyDeep,
-                    titleContentColor = OffWhite,
-                    navigationIconContentColor = OffWhite
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface
                 )
             )
         },
-        containerColor = NavyDeep
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(
             modifier = Modifier
@@ -378,24 +410,16 @@ fun BudgetEditScreen(
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .menuAnchor(MenuAnchorType.PrimaryEditable, true),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = OffWhite,
-                        unfocusedTextColor = OffWhite,
-                        focusedBorderColor = AccentVibrant,
-                        unfocusedBorderColor = NavyAccent,
-                        focusedLabelColor = AccentVibrant,
-                        unfocusedLabelColor = Slate
-                    )
+                        .menuAnchor(MenuAnchorType.PrimaryEditable, true)
                 )
                 ExposedDropdownMenu(
                     expanded = expanded,
                     onDismissRequest = { expanded = false },
-                    containerColor = NavyLight
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
                 ) {
                     categories.forEach { category ->
                         DropdownMenuItem(
-                            text = { Text(category.name, color = OffWhite) },
+                            text = { Text(category.name, color = MaterialTheme.colorScheme.onSurface) },
                             onClick = {
                                 selectedCategoryId = category.id
                                 expanded = false
@@ -411,15 +435,7 @@ fun BudgetEditScreen(
                 label = { Text("MONTHLY LIMIT") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                prefix = { Text("₹") },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = OffWhite,
-                    unfocusedTextColor = OffWhite,
-                    focusedBorderColor = AccentVibrant,
-                    unfocusedBorderColor = NavyAccent,
-                    focusedLabelColor = AccentVibrant,
-                    unfocusedLabelColor = Slate
-                )
+                prefix = { Text("₹") }
             )
 
             Spacer(modifier = Modifier.weight(1f))
@@ -433,7 +449,7 @@ fun BudgetEditScreen(
                                 categoryId = catId,
                                 limitAmount = BigDecimal(limitAmount),
                                 period = "Monthly",
-                                month = budget?.month ?: 0, // ViewModel will handle this for new budgets
+                                month = budget?.month ?: 0,
                                 year = budget?.year ?: 0
                             )
                         )
@@ -443,13 +459,7 @@ fun BudgetEditScreen(
                     .fillMaxWidth()
                     .height(64.dp),
                 shape = RoundedCornerShape(20.dp),
-                enabled = selectedCategoryId != null && limitAmount.toBigDecimalOrNull() != null,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = AccentVibrant,
-                    contentColor = Color.White,
-                    disabledContainerColor = NavyLight,
-                    disabledContentColor = Slate
-                )
+                enabled = selectedCategoryId != null && limitAmount.toBigDecimalOrNull() != null
             ) {
                 Text("SAVE BUDGET", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
             }
@@ -461,22 +471,22 @@ fun BudgetEditScreen(
             onDismissRequest = { showDeleteDialog = false },
             title = { Text("Delete Budget") },
             text = { Text("Are you sure you want to remove this budget?") },
-            containerColor = NavyLight,
-            titleContentColor = OffWhite,
-            textContentColor = OffWhite,
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurface,
             confirmButton = {
                 TextButton(
                     onClick = {
                         onDelete(budget)
                         showDeleteDialog = false
                     },
-                    colors = ButtonDefaults.textButtonColors(contentColor = AccentError)
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
                     Text("DELETE")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }, colors = ButtonDefaults.textButtonColors(contentColor = OffWhite)) {
+                TextButton(onClick = { showDeleteDialog = false }) {
                     Text("CANCEL")
                 }
             }

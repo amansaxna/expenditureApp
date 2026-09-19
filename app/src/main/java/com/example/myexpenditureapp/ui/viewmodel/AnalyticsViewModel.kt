@@ -6,11 +6,32 @@ import com.example.myexpenditureapp.data.Graph
 import com.example.myexpenditureapp.data.entity.Account
 import com.example.myexpenditureapp.data.entity.Category
 import com.example.myexpenditureapp.data.entity.Transaction
+import com.example.myexpenditureapp.domain.insights.InsightsEngine
+import com.example.myexpenditureapp.domain.insights.SmartInsight
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.*
 import java.math.BigDecimal
 import java.math.RoundingMode
+
+enum class DrillLevel {
+    MACRO,
+    CATEGORY,
+    DAY,
+    WEEK,
+    INSIGHT
+}
+
+data class DrillNode(
+    val level: DrillLevel = DrillLevel.MACRO,
+    val title: String = "All Categories & Activity",
+    val subtitle: String = "Macro Overview",
+    val category: Category? = null,
+    val dayOfMonth: Int? = null,
+    val weekNumber: Int? = null,
+    val insight: SmartInsight? = null,
+    val merchant: String? = null
+)
 
 data class AnalyticsUiState(
     val selectedAccountId: Long? = null,
@@ -31,6 +52,9 @@ class AnalyticsViewModel : ViewModel() {
     private val _filterState = MutableStateFlow(AnalyticsUiState())
     val filterState = _filterState.asStateFlow()
 
+    private val _drillState = MutableStateFlow(DrillNode())
+    val drillState = _drillState.asStateFlow()
+
     val transactions: StateFlow<List<Transaction>> = transactionRepository.getAllTransactions()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -42,6 +66,10 @@ class AnalyticsViewModel : ViewModel() {
 
     val budgets: StateFlow<List<com.example.myexpenditureapp.data.entity.Budget>> = budgetRepository.getAllBudgets()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val insights: Flow<List<SmartInsight>> = combine(transactions, categories, budgets) { txs, cats, buds ->
+        InsightsEngine.generateInsights(txs, cats, buds)
+    }
 
     val filteredTransactions = combine(transactions, _filterState) { txs, filters ->
         val calendar = Calendar.getInstance()
@@ -69,9 +97,90 @@ class AnalyticsViewModel : ViewModel() {
         }
     }
 
-    val categorySpending: Flow<Map<Category?, BigDecimal>> = combine(filteredTransactions, categories) { txs, cats ->
+    // Transactions filtered specifically by the active DrillNode
+    val drillDownTransactions: Flow<List<Transaction>> = combine(filteredTransactions, _drillState) { txs, drill ->
+        val cal = Calendar.getInstance()
+        when (drill.level) {
+            DrillLevel.MACRO -> emptyList()
+            DrillLevel.CATEGORY -> {
+                if (drill.category != null) {
+                    txs.filter { it.categoryId == drill.category.id }
+                } else txs
+            }
+            DrillLevel.DAY -> {
+                if (drill.dayOfMonth != null) {
+                    txs.filter {
+                        cal.timeInMillis = it.timestamp
+                        cal.get(Calendar.DAY_OF_MONTH) == drill.dayOfMonth
+                    }
+                } else txs
+            }
+            DrillLevel.WEEK -> {
+                if (drill.weekNumber != null) {
+                    txs.filter {
+                        cal.timeInMillis = it.timestamp
+                        cal.get(Calendar.WEEK_OF_MONTH) == drill.weekNumber
+                    }
+                } else txs
+            }
+            DrillLevel.INSIGHT -> {
+                val ins = drill.insight
+                if (ins != null) {
+                    txs.filter { tx ->
+                        val catMatch = ins.drillDownCategoryId == null || tx.categoryId == ins.drillDownCategoryId
+                        val merchMatch = ins.drillDownMerchant == null || tx.merchant.equals(ins.drillDownMerchant, ignoreCase = true)
+                        val typeMatch = ins.drillDownType == null || tx.type.equals(ins.drillDownType, ignoreCase = true)
+                        catMatch && merchMatch && typeMatch
+                    }
+                } else txs
+            }
+        }
+    }
+
+    private val _isParentRollupEnabled = MutableStateFlow(true)
+    val isParentRollupEnabled = _isParentRollupEnabled.asStateFlow()
+
+    fun toggleParentRollup() {
+        _isParentRollupEnabled.update { !it }
+    }
+
+    // Micro merchant/subcategory breakdown when drilled into a Category
+    val categorySubBreakdown: Flow<Map<String, BigDecimal>> = combine(drillDownTransactions, _drillState) { txs, drill ->
+        if (drill.level != DrillLevel.CATEGORY || drill.category == null) {
+            emptyMap()
+        } else {
+            txs.groupBy { if (it.merchant.isNotBlank()) it.merchant.trim() else "Other" }
+                .mapValues { entry -> entry.value.fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) } }
+                .toList()
+                .sortedByDescending { it.second }
+                .toMap()
+        }
+    }
+
+    val categorySpending: Flow<Map<Category?, BigDecimal>> = combine(
+        filteredTransactions,
+        categories,
+        _isParentRollupEnabled
+    ) { txs, cats, rollup ->
+        val catMap = cats.associateBy { it.id }
         txs.filter { it.type == "Expense" }
-            .groupBy { tx -> cats.find { it.id == tx.categoryId } }
+            .groupBy { tx ->
+                val directCat = tx.categoryId?.let { catMap[it] }
+                if (rollup && directCat?.parentId != null) {
+                    var curr: Category? = directCat
+                    while (curr?.parentId != null) {
+                        val parent = catMap[curr.parentId]
+                        if (parent != null) {
+                            curr = parent
+                        } else {
+                            break
+                        }
+                    }
+                    curr
+                } else {
+                    directCat
+                }
+            }
             .mapValues { entry -> entry.value.fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) } }
     }
 
@@ -93,7 +202,6 @@ class AnalyticsViewModel : ViewModel() {
         val calendar = Calendar.getInstance()
         val result = mutableMapOf<Long, BigDecimal>()
         
-        // Initialize last 6 months with 0.0 to ensure 6 bars are always shown
         for (i in 0 until 6) {
             val tempCal = Calendar.getInstance()
             tempCal.add(Calendar.MONTH, -i)
@@ -131,11 +239,10 @@ class AnalyticsViewModel : ViewModel() {
 
     val spendingTrend: Flow<Map<Long, BigDecimal>> = filteredTransactions.map { txs ->
         txs.filter { it.type == "Expense" }
-            .groupBy { it.timestamp / (24 * 60 * 60 * 1000) * (24 * 60 * 60 * 1000) } // Group by day
+            .groupBy { it.timestamp / (24 * 60 * 60 * 1000) * (24 * 60 * 60 * 1000) }
             .mapValues { it.value.fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) } }
             .toSortedMap()
     }
-
 
     val projectedSpend: Flow<BigDecimal> = spendingTrend.map { trend ->
         if (trend.isEmpty()) return@map BigDecimal.ZERO
@@ -236,6 +343,58 @@ class AnalyticsViewModel : ViewModel() {
 
     fun onMonthYearChange(month: Int, year: Int) {
         _filterState.value = _filterState.value.copy(month = month, year = year)
+        resetDrill()
+    }
+
+    // Bidirectional Drill Operations
+    fun drillDownCategory(category: Category) {
+        _drillState.value = DrillNode(
+            level = DrillLevel.CATEGORY,
+            title = "${category.icon ?: "📁"} ${category.name}",
+            subtitle = "Category Breakdown & Merchants",
+            category = category
+        )
+    }
+
+    fun drillDownDay(dayOfMonth: Int) {
+        val monthName = Calendar.getInstance().apply { set(Calendar.MONTH, _filterState.value.month - 1) }
+            .getDisplayName(Calendar.MONTH, Calendar.SHORT, Locale.getDefault())
+        _drillState.value = DrillNode(
+            level = DrillLevel.DAY,
+            title = "Day $dayOfMonth $monthName",
+            subtitle = "Daily Spending Timeline",
+            dayOfMonth = dayOfMonth
+        )
+    }
+
+    fun drillDownWeek(weekNumber: Int) {
+        _drillState.value = DrillNode(
+            level = DrillLevel.WEEK,
+            title = "Week $weekNumber Activity",
+            subtitle = "Weekly Cashflow Details",
+            weekNumber = weekNumber
+        )
+    }
+
+    fun drillDownInsight(insight: SmartInsight) {
+        _drillState.value = DrillNode(
+            level = DrillLevel.INSIGHT,
+            title = "${insight.icon} ${insight.title}",
+            subtitle = insight.description,
+            insight = insight
+        )
+    }
+
+    fun drillUp() {
+        _drillState.value = DrillNode(
+            level = DrillLevel.MACRO,
+            title = "All Categories & Activity",
+            subtitle = "Macro Overview"
+        )
+    }
+
+    fun resetDrill() {
+        drillUp()
     }
 
     val kpis: Flow<List<KPI>> = combine(filteredTransactions, categories, budgets, projectedSpend, _filterState) { txs, cats, buds, projection, filters ->
@@ -254,9 +413,6 @@ class AnalyticsViewModel : ViewModel() {
             .maxByOrNull { it.value }
             ?.let { cats.find { c -> c.id == it.key }?.name ?: "Other" } ?: "N/A"
             
-        val days = txs.map { it.timestamp / (24 * 60 * 60 * 1000) }.distinct().size.coerceAtLeast(1)
-        val avgDaily = if (days > 0) totalExpenses.divide(BigDecimal(days), 2, RoundingMode.HALF_UP) else BigDecimal.ZERO
-        
         val currentBudgets = buds.filter { it.month == month && it.year == year }
         val budgetLimit = currentBudgets.fold(BigDecimal.ZERO) { acc, b -> acc.add(b.limitAmount) }.coerceAtLeast(BigDecimal.ONE)
         val budgetUsed = totalExpenses.divide(budgetLimit, 4, RoundingMode.HALF_UP).multiply(BigDecimal(100))
@@ -333,7 +489,6 @@ class AnalyticsViewModel : ViewModel() {
                 chooser.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(chooser)
             } catch (e: Exception) {
-                // In a real app, we'd show a snackbar or toast
                 e.printStackTrace()
             }
         }

@@ -10,6 +10,9 @@ interface CategoryDao {
     fun getAllCategories(): Flow<List<Category>>
 
     @Query("SELECT * FROM categories")
+    suspend fun getAllCategoriesSync(): List<Category>
+
+    @Query("SELECT * FROM categories")
     suspend fun getAllCategoriesList(): List<Category>
 
     @Query("SELECT * FROM categories WHERE parentId IS NULL")
@@ -20,6 +23,9 @@ interface CategoryDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCategory(category: Category)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(categories: List<Category>)
 
     @Update
     suspend fun updateCategory(category: Category)

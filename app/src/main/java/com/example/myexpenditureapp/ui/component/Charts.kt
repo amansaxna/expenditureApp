@@ -54,7 +54,13 @@ fun PieChart(
     }
 
     val chartColors = listOf(
-        AccentVibrant, AccentSuccess, AccentWarning, Gold, GoldDark, NavyAccent, Slate
+        Color(0xFF3B82F6), // Blue
+        Color(0xFF10B981), // Emerald Green
+        Color(0xFFF59E0B), // Amber
+        Color(0xFF8B5CF6), // Purple
+        Color(0xFFEC4899), // Pink
+        Color(0xFF06B6D4), // Cyan
+        Color(0xFFF97316)  // Orange
     )
 
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -187,7 +193,8 @@ fun BarChart(
 fun LineChart(
     data: Map<Long, BigDecimal>,
     modifier: Modifier = Modifier,
-    lineColor: Color = AccentVibrant,
+    lineColor: Color = MaterialTheme.colorScheme.primary,
+    dotCenterColor: Color = MaterialTheme.colorScheme.surface,
     projectedData: Map<Long, BigDecimal>? = null
 ) {
     if (data.isEmpty()) return
@@ -298,7 +305,7 @@ fun LineChart(
                 center = point
             )
             drawCircle(
-                color = NavyDeep,
+                color = dotCenterColor,
                 radius = 2.dp.toPx(),
                 center = point
             )

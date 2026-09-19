@@ -30,7 +30,7 @@ class SmsReceiver : BroadcastReceiver() {
                 val parsed = SmsParser.parse(body)
                 if (parsed != null) {
                     Log.d("SmsReceiver", "Parsed transaction: $parsed")
-                    saveTransaction(context, parsed, address)
+                    saveTransaction(context, parsed, address, body)
                     scope.launch {
                         SmsVerificationState.notifySmsParsed("SMS Parsed: ${parsed.merchant} - ₹${parsed.amount}")
                     }
@@ -39,7 +39,7 @@ class SmsReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun saveTransaction(context: Context, smsTx: SmsTransaction, sender: String) {
+    private fun saveTransaction(context: Context, smsTx: SmsTransaction, sender: String, rawMessage: String) {
         scope.launch {
             val smsId = sender + "_" + System.currentTimeMillis()
             
@@ -63,15 +63,17 @@ class SmsReceiver : BroadcastReceiver() {
             }
 
             if (accountId != null) {
+                val matchedCategoryId = Graph.autoCategoryRuleRepository.getMatchingCategoryId(smsTx.merchant)
                 val transaction = Transaction(
                     accountId = accountId,
-                    categoryId = null,
+                    categoryId = matchedCategoryId,
                     amount = smsTx.amount,
                     merchant = smsTx.merchant,
                     timestamp = System.currentTimeMillis(),
                     type = smsTx.type,
                     smsId = smsId,
-                    isReviewed = false
+                    isReviewed = false,
+                    rawMessage = rawMessage
                 )
                 Graph.saveTransactionUseCase(transaction)
                 NotificationHelper.showReviewNotification(

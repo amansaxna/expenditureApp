@@ -33,4 +33,16 @@ sealed interface Route : NavKey {
 
     @Serializable
     data object Analytics : Route
+
+    @Serializable
+    data object Settings : Route
+
+    @Serializable
+    data object GoalList : Route
+
+    @Serializable
+    data object AutoCategoryRuleList : Route
+
+    @Serializable
+    data object SubscriptionList : Route
 }

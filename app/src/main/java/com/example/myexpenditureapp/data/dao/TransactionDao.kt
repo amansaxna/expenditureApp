@@ -34,11 +34,17 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE isReviewed = 0 ORDER BY timestamp DESC")
     fun getUnreviewedTransactions(): Flow<List<Transaction>>
 
+    @Query("SELECT * FROM transactions ORDER BY timestamp DESC")
+    suspend fun getAllTransactionsSync(): List<Transaction>
+
     @Query("UPDATE transactions SET isReviewed = 1 WHERE id = :id")
     suspend fun markAsReviewed(id: Long)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTransaction(transaction: Transaction)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(transactions: List<Transaction>)
 
     @Delete
     suspend fun deleteTransaction(transaction: Transaction)

@@ -12,8 +12,14 @@ interface AccountDao {
     @Query("SELECT * FROM accounts WHERE id = :id")
     suspend fun getAccountById(id: Long): Account?
 
+    @Query("SELECT * FROM accounts")
+    suspend fun getAllAccountsSync(): List<Account>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAccount(account: Account): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(accounts: List<Account>)
 
     @Update
     suspend fun updateAccount(account: Account)

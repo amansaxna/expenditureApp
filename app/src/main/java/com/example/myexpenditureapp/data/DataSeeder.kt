@@ -1,24 +1,20 @@
 package com.example.myexpenditureapp.data
 
-import com.example.myexpenditureapp.data.entity.*
+import com.example.myexpenditureapp.data.entity.Category
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
-import java.math.BigDecimal
-import java.util.*
 
 /**
- * DataSeeder handles initial data setup for the application.
- * On a fresh install, it seeds the default Category hierarchy with emojis.
+ * DataSeeder handles initial category setup for the application on a fresh install.
+ * It ONLY seeds default categories if no categories exist.
+ * It NEVER injects fake accounts or dummy transactions.
  */
 object DataSeeder {
     suspend fun seedData(database: AppDatabase) {
         withContext(Dispatchers.IO) {
             val categoryDao = database.categoryDao()
-            val accountDao = database.accountDao()
-            val transactionDao = database.transactionDao()
 
-            // 1. Seed Categories if empty
+            // Seed Default Taxonomy only if categories table is completely empty
             val existingCategories = categoryDao.getAllCategoriesList()
             if (existingCategories.isEmpty()) {
                 // Root Categories
@@ -59,70 +55,6 @@ object DataSeeder {
                 }
                 personalId?.let { categoryDao.insertCategory(Category(name = "Gym", parentId = it, icon = "🏋️‍♂️")) }
             }
-
-            // 2. Seed Accounts if empty
-            val accounts = accountDao.getAllAccounts().first()
-            if (accounts.isEmpty()) {
-                accountDao.insertAccount(Account(name = "SBI Bank", type = "Bank", balance = BigDecimal("50000")))
-                accountDao.insertAccount(Account(name = "Paytm Wallet", type = "Wallet", balance = BigDecimal("1500")))
-                accountDao.insertAccount(Account(name = "Cash", type = "Cash", balance = BigDecimal("2000")))
-            }
-
-            // 3. Seed Transactions for last 3 months if empty
-            val existingTransactions = transactionDao.getAllTransactions().first()
-            if (existingTransactions.isEmpty()) {
-                val allAccounts = accountDao.getAllAccounts().first()
-                val allCategories = categoryDao.getAllCategoriesList()
-                
-                if (allAccounts.isNotEmpty() && allCategories.isNotEmpty()) {
-                    val sbi = allAccounts.find { it.name == "SBI Bank" }?.id ?: allAccounts.first().id
-                    val cash = allAccounts.find { it.name == "Cash" }?.id ?: allAccounts.first().id
-                    
-                    val groceries = allCategories.find { it.name == "Groceries" }?.id
-                    val rent = allCategories.find { it.name == "Rent" }?.id
-                    val fuel = allCategories.find { it.name == "Fuel" }?.id
-                    val salary = allCategories.find { it.name == "Salary" }?.id
-                    val gym = allCategories.find { it.name == "Gym" }?.id
-                    val dining = allCategories.find { it.name == "Restaurants" }?.id
-
-                    // Helper to add transaction
-                    suspend fun addTx(amount: String, merchant: String, type: String, catId: Long?, accId: Long, monthsAgo: Int, day: Int) {
-                        val cal = Calendar.getInstance()
-                        cal.add(Calendar.MONTH, -monthsAgo)
-                        val maxDay = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
-                        cal.set(Calendar.DAY_OF_MONTH, day.coerceIn(1, maxDay))
-                        transactionDao.insertTransaction(Transaction(
-                            accountId = accId,
-                            categoryId = catId,
-                            amount = BigDecimal(amount),
-                            merchant = merchant,
-                            type = type,
-                            timestamp = cal.timeInMillis,
-                            isReviewed = true
-                        ))
-                    }
-
-                    // Seed data for last 3 months
-                    for (m in 0..2) {
-                        addTx("45000", "Monthly Salary", "Income", salary, sbi, m, 1)
-                        addTx("15000", "House Rent", "Expense", rent, sbi, m, 5)
-                        addTx("1200", "Supermarket", "Expense", groceries, cash, m, 10)
-                        addTx("800", "Petrol Pump", "Expense", fuel, sbi, m, 12)
-                        addTx("2500", "Cult Gym Membership", "Expense", gym, sbi, m, 2)
-                        addTx("1500", "Dinner at Social", "Expense", dining, sbi, m, 20)
-                        addTx("500", "Blue Tokai Coffee", "Expense", dining, cash, m, 15)
-                        addTx("3000", "Electricity Bill", "Expense", null, sbi, m, 18)
-                        
-                        // Weekly expenses
-                        for (w in 1..4) {
-                            addTx("450", "Weekly Groceries", "Expense", groceries, cash, m, w * 7)
-                            addTx("600", "Uber Ride", "Expense", fuel, sbi, m, w * 7 - 3)
-                            addTx("120", "Milk & Snacks", "Expense", groceries, cash, m, w * 7 - 5)
-                        }
-                    }
-                }
-            }
         }
     }
 }
-

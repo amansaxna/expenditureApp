@@ -5,21 +5,49 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
-import com.example.myexpenditureapp.data.dao.AccountDao
-import com.example.myexpenditureapp.data.dao.BudgetDao
-import com.example.myexpenditureapp.data.dao.CategoryDao
-import com.example.myexpenditureapp.data.dao.TransactionDao
-import com.example.myexpenditureapp.data.entity.Account
-import com.example.myexpenditureapp.data.entity.Budget
-import com.example.myexpenditureapp.data.entity.Category
-import com.example.myexpenditureapp.data.entity.Transaction
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.myexpenditureapp.data.dao.*
+import com.example.myexpenditureapp.data.entity.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS `subscriptions` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                `name` TEXT NOT NULL,
+                `amount` TEXT NOT NULL,
+                `billingCycle` TEXT NOT NULL,
+                `dueDayOfMonth` INTEGER NOT NULL,
+                `categoryId` INTEGER,
+                `accountId` INTEGER,
+                `autoDetectEnabled` INTEGER NOT NULL,
+                `lastPaidDate` INTEGER,
+                `notes` TEXT,
+                `isActive` INTEGER NOT NULL,
+                FOREIGN KEY(`categoryId`) REFERENCES `categories`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL,
+                FOREIGN KEY(`accountId`) REFERENCES `accounts`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_subscriptions_categoryId` ON `subscriptions` (`categoryId`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `index_subscriptions_accountId` ON `subscriptions` (`accountId`)")
+    }
+}
+
 @Database(
-    entities = [Account::class, Category::class, Transaction::class, Budget::class],
-    version = 5,
+    entities = [
+        Account::class,
+        Category::class,
+        Transaction::class,
+        Budget::class,
+        AutoCategoryRule::class,
+        SavingGoal::class,
+        Subscription::class
+    ],
+    version = 8,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -28,6 +56,9 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun categoryDao(): CategoryDao
     abstract fun transactionDao(): TransactionDao
     abstract fun budgetDao(): BudgetDao
+    abstract fun autoCategoryRuleDao(): AutoCategoryRuleDao
+    abstract fun savingGoalDao(): SavingGoalDao
+    abstract fun subscriptionDao(): SubscriptionDao
 
     companion object {
         @Volatile
@@ -40,11 +71,12 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "expenditure_database"
                 )
-                    .fallbackToDestructiveMigration()
+                    .addMigrations(MIGRATION_7_8)
+                    .fallbackToDestructiveMigration(dropAllTables = false)
                     .build()
                 INSTANCE = instance
                 
-                // Seeding categories on a background thread
+                // Seeding default categories only if empty on a background thread
                 CoroutineScope(Dispatchers.IO).launch {
                     DataSeeder.seedData(instance)
                 }

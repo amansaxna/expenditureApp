@@ -54,17 +54,14 @@ fun CalculatorTextField(
             }
         },
         singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text), // Allow +, -, *, /
-        prefix = { Text("₹") }
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text) // Allow +, -, *, /
     )
 }
 
 fun evaluateExpression(expression: String): String? {
     return try {
-        // Simple evaluator for +, -, *, /
-        // Note: This is a very basic implementation. 
-        // For a "pro" app, we might want a more robust parser.
-        val cleaned = expression.replace(" ", "")
+        val cleaned = expression.replace("₹", "").replace(" ", "").trim()
+        if (cleaned.isBlank()) return null
         
         // Handle basic addition/subtraction first
         val result = if (cleaned.contains("+")) {

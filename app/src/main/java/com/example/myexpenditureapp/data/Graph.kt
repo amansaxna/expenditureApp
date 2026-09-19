@@ -21,6 +21,7 @@ import com.example.myexpenditureapp.domain.usecase.transaction.SaveTransactionUs
 
 object Graph {
     lateinit var database: AppDatabase
+    lateinit var appContext: Context
 
     val accountRepository: AccountRepository by lazy {
         AccountRepositoryImpl(database.accountDao())
@@ -38,6 +39,18 @@ object Graph {
         TransactionRepositoryImpl(database, database.transactionDao(), database.accountDao())
     }
 
+    val autoCategoryRuleRepository: com.example.myexpenditureapp.domain.repository.AutoCategoryRuleRepository by lazy {
+        com.example.myexpenditureapp.data.repository.AutoCategoryRuleRepositoryImpl(database.autoCategoryRuleDao())
+    }
+
+    val savingGoalRepository: com.example.myexpenditureapp.domain.repository.SavingGoalRepository by lazy {
+        com.example.myexpenditureapp.data.repository.SavingGoalRepositoryImpl(database.savingGoalDao())
+    }
+
+    val subscriptionRepository: com.example.myexpenditureapp.domain.repository.SubscriptionRepository by lazy {
+        com.example.myexpenditureapp.data.repository.SubscriptionRepositoryImpl(database.subscriptionDao())
+    }
+
     val getAccountsUseCase by lazy { GetAccountsUseCase(accountRepository) }
     val saveAccountUseCase by lazy { SaveAccountUseCase(accountRepository) }
     val deleteAccountUseCase by lazy { DeleteAccountUseCase(accountRepository) }
@@ -51,6 +64,7 @@ object Graph {
     val deleteTransactionUseCase by lazy { DeleteTransactionUseCase(transactionRepository) }
 
     fun provide(context: Context) {
+        appContext = context.applicationContext
         database = AppDatabase.getDatabase(context)
     }
 }
