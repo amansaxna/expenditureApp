@@ -116,3 +116,4 @@ Detailed technical specifications are available in the [`docs/`](docs/) director
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
+# SpendZen
