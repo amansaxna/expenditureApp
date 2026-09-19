@@ -1,8 +1,8 @@
-# 🔄 Software Development Lifecycle (SDLC) Specification
+# Software Development Lifecycle (SDLC) Specification
 
 ## 1. SDLC Phases & Operational Workflow
 
-MyExpenditureApp adheres to a structured, quality-first software development lifecycle:
+SpendZen adheres to a structured, quality-first software development lifecycle:
 
 ```mermaid
 graph LR

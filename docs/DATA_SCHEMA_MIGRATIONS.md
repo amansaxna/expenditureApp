@@ -1,4 +1,4 @@
-# 🗄️ Database Schema & Migration Specification
+# Database Schema & Migration Specification
 
 ## 1. Relational Schema & Entity Relationships
 

@@ -1,8 +1,8 @@
-# 🏗️ System Architecture & Engineering Blueprint
+# System Architecture & Engineering Specification
 
 ## 1. Architectural Philosophy & Design Principles
 
-**MyExpenditureApp** is architected around four non-negotiable engineering tenets:
+**SpendZen** is architected around four non-negotiable engineering tenets:
 
 1. **Local-First & Offline Resilience**: Zero dependence on remote servers. Full ACID database transactions via SQLite/Room.
 2. **Double-Entry & Numerical Precision**: All currency math uses `java.math.BigDecimal` with explicit scale and `RoundingMode.HALF_UP` to prevent IEEE 754 floating-point truncation.

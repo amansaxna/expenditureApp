@@ -1,8 +1,8 @@
-# 🔒 Security Model & Privacy Architecture
+# Security Model & Privacy Architecture
 
 ## 1. Local-First & Zero-Knowledge Philosophy
 
-**MyExpenditureApp** operates under a strict **Zero-Knowledge, Zero-Telemetry** privacy model:
+**SpendZen** operates under a strict **Zero-Knowledge, Zero-Telemetry** privacy model:
 
 1. **No External Network Calls**: The app does not transmit financial data, account numbers, merchant names, or device identifiers to any remote server or analytics platform.
 2. **Local Sandbox Isolation**: SQLite database files (`expenditure_db`) reside strictly within Android's internal app sandbox (`/data/data/com.example.myexpenditureapp/databases/`), protected by Linux user ID process isolation.

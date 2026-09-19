@@ -1,6 +1,6 @@
-# 🤝 Contributing to MyExpenditureApp
+# Contributing Guidelines
 
-Thank you for contributing to **MyExpenditureApp**! To maintain architectural purity, double-entry financial correctness, and Material 3 design excellence, please follow these guidelines.
+Thank you for contributing to **SpendZen**! To maintain architectural purity, double-entry financial correctness, and Material 3 design excellence, please follow these guidelines.
 
 ---
 
