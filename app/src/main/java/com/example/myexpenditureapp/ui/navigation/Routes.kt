@@ -45,4 +45,7 @@ sealed interface Route : NavKey {
 
     @Serializable
     data object SubscriptionList : Route
+
+    @Serializable
+    data object SmartInbox : Route
 }

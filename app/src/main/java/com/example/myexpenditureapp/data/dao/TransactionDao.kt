@@ -40,6 +40,9 @@ interface TransactionDao {
     @Query("UPDATE transactions SET isReviewed = 1 WHERE id = :id")
     suspend fun markAsReviewed(id: Long)
 
+    @Query("UPDATE transactions SET isReviewed = 1 WHERE isReviewed = 0")
+    suspend fun markAllAsReviewed()
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTransaction(transaction: Transaction)
 
@@ -54,6 +57,9 @@ interface TransactionDao {
 
     @Query("SELECT EXISTS(SELECT 1 FROM transactions WHERE smsId = :smsId)")
     suspend fun existsBySmsId(smsId: String): Boolean
+
+    @Query("DELETE FROM transactions WHERE isReviewed = 0")
+    suspend fun deleteAllUnreviewedTransactions()
 
     @Query("DELETE FROM transactions")
     suspend fun deleteAllTransactions()

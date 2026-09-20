@@ -31,6 +31,10 @@ class TransactionRepositoryImpl(
         transactionDao.markAsReviewed(id)
     }
 
+    override suspend fun markAllAsReviewed() {
+        transactionDao.markAllAsReviewed()
+    }
+
     override suspend fun getTransactionById(id: Long): Transaction? = transactionDao.getTransactionById(id)
 
     override suspend fun saveTransaction(transaction: Transaction) {
@@ -84,6 +88,16 @@ class TransactionRepositoryImpl(
     }
 
     override suspend fun existsBySmsId(smsId: String): Boolean = transactionDao.existsBySmsId(smsId)
+
+    override suspend fun deleteAllUnreviewedTransactions() {
+        database.withTransaction {
+            val unreviewed = transactionDao.getAllTransactionsSync().filter { !it.isReviewed }
+            for (tx in unreviewed) {
+                adjustBalances(tx, -1)
+            }
+            transactionDao.deleteAllUnreviewedTransactions()
+        }
+    }
 
     override suspend fun deleteAllTransactions() {
         database.withTransaction {

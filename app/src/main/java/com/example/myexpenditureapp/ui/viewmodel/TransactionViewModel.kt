@@ -233,6 +233,17 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    fun markAllAsReviewed() {
+        viewModelScope.launch {
+            try {
+                transactionRepository.markAllAsReviewed()
+                _eventFlow.emit(UiEvent.ShowSnackbar("All pending transactions approved!"))
+            } catch (e: Exception) {
+                _eventFlow.emit(UiEvent.ShowSnackbar("Error approving transactions: ${e.message}"))
+            }
+        }
+    }
+
     fun reviewTransaction(transactionId: Long, categoryId: Long? = null, saveAsRule: Boolean = false) {
         viewModelScope.launch {
             val tx = transactionRepository.getTransactionById(transactionId) ?: return@launch
@@ -254,6 +265,17 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
             NotificationHelper.triggerBudgetCheck(getApplication())
             _eventFlow.emit(UiEvent.ShowSnackbar("Transaction reviewed!"))
             _eventFlow.emit(UiEvent.Success)
+        }
+    }
+
+    fun deleteAllUnreviewedTransactions() {
+        viewModelScope.launch {
+            try {
+                transactionRepository.deleteAllUnreviewedTransactions()
+                _eventFlow.emit(UiEvent.ShowSnackbar("All pending unreviewed transactions cleared"))
+            } catch (e: Exception) {
+                _eventFlow.emit(UiEvent.ShowSnackbar("Error clearing pending transactions: ${e.message}"))
+            }
         }
     }
 

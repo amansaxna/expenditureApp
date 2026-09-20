@@ -1,3 +1,11 @@
 <resources>
     <string name="app_name">SpendZen</string>
+    <string name="shortcut_add_short">Add Expense</string>
+    <string name="shortcut_add_long">Log a new expense</string>
+    <string name="shortcut_analytics_short">Analytics</string>
+    <string name="shortcut_analytics_long">View spending trends &amp; insights</string>
+    <string name="shortcut_goals_short">Savings Goals</string>
+    <string name="shortcut_goals_long">View savings pockets &amp; targets</string>
+    <string name="shortcut_transactions_short">History</string>
+    <string name="shortcut_transactions_long">View transaction history</string>
 </resources>

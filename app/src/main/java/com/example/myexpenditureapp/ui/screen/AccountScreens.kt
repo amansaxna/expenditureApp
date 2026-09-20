@@ -56,6 +56,7 @@ fun AccountListScreen(
     onAddAccount: () -> Unit,
     onEditAccount: (Account) -> Unit,
     onReviewTransaction: (Transaction) -> Unit,
+    onOpenSmartInbox: () -> Unit = {},
     onOpenGoals: () -> Unit = {}
 ) {
     val accounts by accountViewModel.accounts.collectAsStateWithLifecycle()
@@ -324,7 +325,9 @@ fun AccountListScreen(
                         transactions = unreviewedTransactions,
                         onMarkAsReviewed = { transactionViewModel.markAsReviewed(it.id) },
                         onDeleteUnreviewed = { transactionViewModel.deleteTransaction(it) },
-                        onReviewDetail = onReviewTransaction
+                        onClearAllUnreviewed = { transactionViewModel.deleteAllUnreviewedTransactions() },
+                        onReviewDetail = onReviewTransaction,
+                        onOpenSmartInbox = onOpenSmartInbox
                     )
                 }
             }
@@ -515,8 +518,35 @@ fun ToReviewSection(
     transactions: List<Transaction>,
     onMarkAsReviewed: (Transaction) -> Unit,
     onDeleteUnreviewed: (Transaction) -> Unit,
-    onReviewDetail: (Transaction) -> Unit
+    onClearAllUnreviewed: () -> Unit,
+    onReviewDetail: (Transaction) -> Unit,
+    onOpenSmartInbox: () -> Unit = {}
 ) {
+    var showDismissAllDialog by remember { mutableStateOf(false) }
+
+    if (showDismissAllDialog) {
+        AlertDialog(
+            onDismissRequest = { showDismissAllDialog = false },
+            title = { Text("Dismiss All Pending?") },
+            text = { Text("Are you sure you want to discard all ${transactions.size} pending unreviewed transactions? This will revert their temporary impact on your account balance.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDismissAllDialog = false
+                        onClearAllUnreviewed()
+                    }
+                ) {
+                    Text("Dismiss All", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDismissAllDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     Column(
         verticalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier.animateContentSize()
@@ -526,7 +556,10 @@ fun ToReviewSection(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onOpenSmartInbox)
+            ) {
                 Text(
                     text = "SMART INBOX",
                     style = MaterialTheme.typography.labelSmall,
@@ -549,74 +582,43 @@ fun ToReviewSection(
                     )
                 }
             }
-        }
-        
-        transactions.take(3).forEach { transaction ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(18.dp))
-                    .clickable { onReviewDetail(transaction) },
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-            ) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(
+                    onClick = onOpenSmartInbox,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                 ) {
-                    Surface(
-                        modifier = Modifier.size(42.dp),
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                    Text(
+                        "View All",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                if (transactions.size > 1) {
+                    TextButton(
+                        onClick = { showDismissAllDialog = true },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Default.Sms,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            transaction.merchant,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1
+                            "Dismiss All",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.Bold
                         )
-                        Text(
-                            "₹${transaction.amount.stripTrailingZeros().toPlainString()} • Tap to assign category",
-                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = MonospaceFont),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    
-                    IconButton(
-                        onClick = { onDeleteUnreviewed(transaction) },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = "Delete misread transaction",
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
-
-                    FilledTonalButton(
-                        onClick = { onMarkAsReviewed(transaction) },
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("DONE", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.ExtraBold)
                     }
                 }
             }
+        }
+        
+        transactions.take(3).forEach { transaction ->
+            SwipeablePendingTransactionItem(
+                transaction = transaction,
+                onMarkAsReviewed = { onMarkAsReviewed(transaction) },
+                onDeleteUnreviewed = { onDeleteUnreviewed(transaction) },
+                onReviewDetail = { onReviewDetail(transaction) }
+            )
         }
     }
 }

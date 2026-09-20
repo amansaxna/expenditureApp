@@ -9,25 +9,49 @@ data class SmsTransaction(
 )
 
 object SmsParser {
-    // Non-transaction blacklist (e.g., pure OTPs, login codes, promotional spam without spending)
+    // Non-transaction blacklist: OTPs, login codes, 2FA requests (these are authorizations, NOT completed transactions)
     private val OTP_PATTERNS = listOf(
-        Regex("""(?i)\b(?:otp|one time password|verification code|security code|secret code)\b"""),
-        Regex("""(?i)\bdo not share (?:this|your) (?:otp|code)\b""")
+        Regex("""(?i)\b(?:otp|one time password|verification code|security code|secret code|login code|vpa registration|auth code)\b"""),
+        Regex("""(?i)\bdo not share (?:this|your)?\b"""),
+        Regex("""(?i)\bnever share (?:your)?\b"""),
+        Regex("""(?i)\bvalid for \d+\s*(?:mins|minutes|seconds)\b""")
+    )
+
+    // Promotional & marketing blacklist
+    private val PROMO_PATTERNS = listOf(
+        Regex("""(?i)\b(?:flat\s+(?:rs\.?|inr|₹)?\s*\d+\s*off|%\s*off|discount|coupon|promo code|promo|voucher|deal of the day)\b"""),
+        Regex("""(?i)\b(?:cashback of up to|win up to|claim now|is waiting|valid till|hurry|exclusive offer)\b"""),
+        Regex("""(?i)\b(?:pre-approved|apply for loan|instant loan|pre approved|loan limit|credit limit)\b"""),
+        Regex("""(?i)\b(?:recharge now|data balance|plan expires|pack expires|bill due|bill generated|payment reminder|due on|due date)\b"""),
+        Regex("""(?i)\b(?:cash prize|luckydraw|spin to win|congratulations|congrats|click here|apply now|shop now|buy now)\b""")
+    )
+
+    // Strict bank / payment confirmation indicators (must be present if promo patterns match)
+    private val STRICT_BANK_SETTLEMENT_PATTERNS = listOf(
+        Regex("""(?i)\b(?:debited (?:from|by|for)|credited (?:to|with|for)|spent on your|card ending \d+|a/c (?:no\.?\s*)?[x\*\d]+ (?:is|has been)?\s*(?:debited|credited))\b"""),
+        Regex("""(?i)\b(?:transferred to vpa|sent to vpa|vpa pay of)\b""")
+    )
+
+    private val INCOME_KEYWORDS = listOf(
+        "credited", "received", "added to account", "refund", "refunded", "cashback credited", "deposited", "cr.", "cr ", "credit", "reversal", "salary"
+    )
+
+    private val EXPENSE_KEYWORDS = listOf(
+        "debited", "spent", "paid", "dr.", "dr ", "debit", "sent", "purchased", "purchase of",
+        "withdrawn", "withdrew", "transferred to", "transferred", "charged", "vpa pay",
+        "payment to", "payment of", "payment for", "payment at",
+        "transaction of", "transaction at", "txn of", "txn at", "successful from"
     )
 
     // Patterns specifically identifying the transaction amount
     private val TXN_AMOUNT_PATTERNS = listOf(
-        Regex("""(?i)(?:(?:debited|credited|spent|paid|transferred|withdrawn|charged|added|received|refund(?:ed)?)\s+(?:by|for|of|with)?\s*(?:rs\.?|inr|₹|re\.?|\$|usd|€|eur|£|gbp)?\s*([\d,]+\.?\d*))"""),
+        Regex("""(?i)(?:(?:debited|credited|spent|paid|transferred|withdrawn|charged|added|received|refund(?:ed)?)\s+(?:by|for|of|with|amounting to)?\s*(?:rs\.?|inr|₹|re\.?|\$|usd|€|eur|£|gbp)?\s*([\d,]+\.?\d*))"""),
         Regex("""(?i)(?:rs\.?|inr|₹|re\.?|\$|usd|€|eur|£|gbp)\s*([\d,]+\.?\d*)\s*(?:(?:debited|credited|spent|paid|transferred|withdrawn|charged|added|received|refund(?:ed)?))"""),
         Regex("""(?i)(?:txn of|transaction of|payment of|vpa pay of|purchase of)\s*(?:rs\.?|inr|₹|re\.?|\$|usd|€|eur|£|gbp)?\s*([\d,]+\.?\d*)"""),
-        Regex("""(?i)(?:rs\.?|inr|₹|re\.?|\$|usd|€|eur|£|gbp)\s*([\d,]+\.?\d*)""")
-    )
-
-    private val INCOME_KEYWORDS = listOf(
-        "credited", "received", "added", "refund", "cashback", "deposited", "cr.", "cr ", "credit", "reversal", "salary", "bonus"
-    )
-    private val EXPENSE_KEYWORDS = listOf(
-        "debited", "spent", "paid", "dr.", "dr ", "debit", "sent", "purchased", "withdrawn", "withdrew", "transferred to", "charged"
+        Regex("""(?i)(?:rs\.?|inr|₹|re\.?|\$|usd|€|eur|£|gbp)\s*([\d,]+\.?\d*)\s+spent\s+on"""),
+        Regex("""(?i)(?:rs\.?|inr|₹|re\.?|\$|usd|€|eur|£|gbp)\s*([\d,]+\.?\d*)\s+(?:successful|done)\s+from"""),
+        Regex("""(?i)(?:for|amount)\s+(?:rs\.?|inr|₹|re\.?|\$|usd|€|eur|£|gbp)\s*([\d,]+\.?\d*)"""),
+        Regex("""(?i)(?:rs\.?|inr|₹|re\.?|\$|usd|€|eur|£|gbp)\.?\s*([\d,]+\.?\d*)""")
     )
 
     private val MERCHANT_PATTERNS = listOf(
@@ -51,32 +75,26 @@ object SmsParser {
         val trimmed = message.trim()
         if (trimmed.isBlank()) return null
 
-        // If it's pure OTP and doesn't contain actual spend/debit/credit keywords, skip
-        val isOtp = OTP_PATTERNS.any { it.containsMatchIn(trimmed) }
-        val hasTxnAction = EXPENSE_KEYWORDS.any { trimmed.contains(it, ignoreCase = true) } ||
-                INCOME_KEYWORDS.any { trimmed.contains(it, ignoreCase = true) }
-        if (isOtp && !hasTxnAction) return null
-
-        // 1. Extract Amount
-        var amount: BigDecimal? = null
-        for (pattern in TXN_AMOUNT_PATTERNS) {
-            val match = pattern.find(trimmed)
-            if (match != null) {
-                val rawAmountStr = match.groupValues[1].replace(",", "").trim()
-                if (rawAmountStr.isNotEmpty() && rawAmountStr != ".") {
-                    val parsedAmt = try { BigDecimal(rawAmountStr) } catch (e: Exception) { null }
-                    if (parsedAmt != null && parsedAmt > BigDecimal.ZERO) {
-                        amount = parsedAmt
-                        break
-                    }
-                }
-            }
+        // 1. Unconditionally reject OTPs and auth verification codes
+        if (OTP_PATTERNS.any { it.containsMatchIn(trimmed) }) {
+            return null
         }
-        if (amount == null) return null
 
-        // 2. Classify Transaction Type
+        // 2. Reject marketing / promo / spam messages unless they are strict bank settlements
+        val isPromo = PROMO_PATTERNS.any { it.containsMatchIn(trimmed) }
+        val isStrictBankSettlement = STRICT_BANK_SETTLEMENT_PATTERNS.any { it.containsMatchIn(trimmed) }
+        if (isPromo && !isStrictBankSettlement) {
+            return null
+        }
+
+        // 3. Classify and require a clear transaction action (Income or Expense)
         val isIncome = INCOME_KEYWORDS.any { trimmed.contains(it, ignoreCase = true) }
         val isExpense = EXPENSE_KEYWORDS.any { trimmed.contains(it, ignoreCase = true) }
+
+        // If neither income nor expense action is present, it's not a transactional message
+        if (!isIncome && !isExpense) {
+            return null
+        }
 
         val type = when {
             isIncome && !isExpense -> "Income"
@@ -86,10 +104,27 @@ object SmsParser {
                 val debitIndex = trimmed.lowercase().indexOf("debit").let { if (it == -1) trimmed.lowercase().indexOf("debited") else it }
                 if (creditIndex in 0 until debitIndex) "Income" else "Expense"
             }
-            else -> "Expense"
+            else -> return null
         }
 
-        // 3. Extract Merchant / Beneficiary
+        // 4. Extract Amount
+        var amount: BigDecimal? = null
+        for (pattern in TXN_AMOUNT_PATTERNS) {
+            val match = pattern.find(trimmed)
+            if (match != null) {
+                val rawAmountStr = match.groupValues[1].replace(",", "").trim()
+                if (rawAmountStr.isNotEmpty() && rawAmountStr != ".") {
+                    val parsedAmt = try { BigDecimal(rawAmountStr) } catch (e: Exception) { null }
+                    if (parsedAmt != null && parsedAmt > BigDecimal.ZERO && parsedAmt < BigDecimal("100000000")) {
+                        amount = parsedAmt
+                        break
+                    }
+                }
+            }
+        }
+        if (amount == null) return null
+
+        // 5. Extract Merchant / Beneficiary
         var merchant = "Unknown"
         val filteredMessage = trimmed
             .replace(Regex("""(?i)\bto your (?:account|acct|a/c)\b"""), "")

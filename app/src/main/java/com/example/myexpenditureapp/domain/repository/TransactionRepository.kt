@@ -15,9 +15,11 @@ interface TransactionRepository {
     ): Flow<List<Transaction>>
     fun getUnreviewedTransactions(): Flow<List<Transaction>>
     suspend fun markAsReviewed(id: Long)
+    suspend fun markAllAsReviewed()
     suspend fun saveTransaction(transaction: Transaction)
     suspend fun deleteTransaction(transaction: Transaction)
     suspend fun getTransactionById(id: Long): Transaction?
     suspend fun existsBySmsId(smsId: String): Boolean
+    suspend fun deleteAllUnreviewedTransactions()
     suspend fun deleteAllTransactions()
 }

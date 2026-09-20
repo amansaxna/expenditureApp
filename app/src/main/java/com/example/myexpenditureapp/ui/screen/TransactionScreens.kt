@@ -184,17 +184,16 @@ fun TransactionListScreen(
             }
         },
         floatingActionButton = {
-            FloatingActionButton(
+            SmallFloatingActionButton(
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     onAddTransaction()
                 },
-                shape = RoundedCornerShape(18.dp),
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
-                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Transaction", modifier = Modifier.size(26.dp))
+                Icon(Icons.Default.Add, contentDescription = "Add Transaction")
             }
         }
     ) { innerPadding ->

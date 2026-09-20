@@ -25,12 +25,13 @@ class SmsReceiver : BroadcastReceiver() {
             for (sms in messages) {
                 val body = sms.displayMessageBody
                 val address = sms.displayOriginatingAddress ?: "Unknown"
+                val timestamp = sms.timestampMillis
                 Log.d("SmsReceiver", "Received SMS from $address: $body")
 
                 val parsed = SmsParser.parse(body)
                 if (parsed != null) {
                     Log.d("SmsReceiver", "Parsed transaction: $parsed")
-                    saveTransaction(context, parsed, address, body)
+                    saveTransaction(context, parsed, address, timestamp, body)
                     scope.launch {
                         SmsVerificationState.notifySmsParsed("SMS Parsed: ${parsed.merchant} - ₹${parsed.amount}")
                     }
@@ -39,9 +40,10 @@ class SmsReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun saveTransaction(context: Context, smsTx: SmsTransaction, sender: String, rawMessage: String) {
+    private fun saveTransaction(context: Context, smsTx: SmsTransaction, sender: String, timestamp: Long, rawMessage: String) {
         scope.launch {
-            val smsId = sender + "_" + System.currentTimeMillis()
+            val txTime = if (timestamp > 0) timestamp else System.currentTimeMillis()
+            val smsId = "sms_${sender}_${txTime}_${smsTx.amount}"
             
             // Check for duplicates
             if (Graph.transactionRepository.existsBySmsId(smsId)) {
@@ -69,7 +71,7 @@ class SmsReceiver : BroadcastReceiver() {
                     categoryId = matchedCategoryId,
                     amount = smsTx.amount,
                     merchant = smsTx.merchant,
-                    timestamp = System.currentTimeMillis(),
+                    timestamp = txTime,
                     type = smsTx.type,
                     smsId = smsId,
                     isReviewed = false,

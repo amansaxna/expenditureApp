@@ -7,6 +7,11 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,16 +28,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.myexpenditureapp.R
 import com.example.myexpenditureapp.data.Graph
 import com.example.myexpenditureapp.data.backup.BackupManager
 import com.example.myexpenditureapp.ui.theme.*
@@ -52,6 +60,9 @@ fun SettingsScreen(
     val haptic = LocalHapticFeedback.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    val aboutIconRotation = remember { Animatable(0f) }
+    val aboutIconScale = remember { Animatable(1f) }
 
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     var isNotificationAccessGranted by remember {
@@ -357,8 +368,45 @@ fun SettingsScreen(
                     modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
                 )
 
+                val triggerAboutAnimation: () -> Unit = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    scope.launch {
+                        launch {
+                            aboutIconScale.snapTo(0.82f)
+                            aboutIconScale.animateTo(
+                                targetValue = 1.28f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessLow
+                                )
+                            )
+                            aboutIconScale.animateTo(
+                                targetValue = 1f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessMedium
+                                )
+                            )
+                        }
+                        launch {
+                            aboutIconRotation.snapTo(0f)
+                            aboutIconRotation.animateTo(
+                                targetValue = 360f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioLowBouncy,
+                                    stiffness = Spring.StiffnessLow
+                                )
+                            )
+                            aboutIconRotation.snapTo(0f)
+                        }
+                    }
+                }
+
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable { triggerAboutAnimation() },
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
@@ -372,16 +420,23 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(
-                            modifier = Modifier.size(38.dp),
+                            modifier = Modifier
+                                .size(40.dp)
+                                .graphicsLayer {
+                                    scaleX = aboutIconScale.value
+                                    scaleY = aboutIconScale.value
+                                    rotationZ = aboutIconRotation.value
+                                },
                             shape = RoundedCornerShape(10.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                            color = Color(0xFF0B1019),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
-                                    imageVector = Icons.Default.Shield,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
+                                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                                    contentDescription = "SpendZen App Icon",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(40.dp)
                                 )
                             }
                         }

@@ -42,6 +42,11 @@ class TransactionNotificationListener : NotificationListenerService() {
         if (sbn == null) return
 
         val pkg = sbn.packageName ?: ""
+        // Crucial: Ignore notifications posted by our own app to avoid infinite notification loops
+        if (pkg == packageName || pkg == applicationContext.packageName) {
+            return
+        }
+
         val extras = sbn.notification.extras ?: return
 
         val title = extras.getCharSequence("android.title")?.toString() ?: ""
@@ -51,20 +56,18 @@ class TransactionNotificationListener : NotificationListenerService() {
         val combinedMessage = "$title. $text $bigText".trim()
         if (combinedMessage.isBlank()) return
 
-        // Process if package is a payment app OR message contains financial keywords
+        // Process if package is a known payment app OR message contains explicit transactional keywords
         val isPaymentApp = PAYMENT_PACKAGES.contains(pkg)
-        val hasFinancialKeywords = combinedMessage.contains("debited", ignoreCase = true) ||
+        val hasTransactionalKeywords = combinedMessage.contains("debited", ignoreCase = true) ||
                 combinedMessage.contains("credited", ignoreCase = true) ||
                 combinedMessage.contains("paid", ignoreCase = true) ||
                 combinedMessage.contains("sent", ignoreCase = true) ||
                 combinedMessage.contains("received", ignoreCase = true) ||
                 combinedMessage.contains("spent", ignoreCase = true) ||
-                combinedMessage.contains("UPI", ignoreCase = true) ||
-                combinedMessage.contains("₹", ignoreCase = true) ||
-                combinedMessage.contains("Rs", ignoreCase = true) ||
-                combinedMessage.contains("INR", ignoreCase = true)
+                combinedMessage.contains("withdrawn", ignoreCase = true) ||
+                combinedMessage.contains("transferred", ignoreCase = true)
 
-        if (!isPaymentApp && !hasFinancialKeywords) return
+        if (!isPaymentApp && !hasTransactionalKeywords) return
 
         Log.d(TAG, "Analyzing notification from $pkg: $combinedMessage")
 

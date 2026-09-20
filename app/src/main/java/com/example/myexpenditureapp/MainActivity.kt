@@ -74,7 +74,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private val isQuickAddLaunched = mutableStateOf(false)
+    private val pendingShortcutAction = mutableStateOf<String?>(null)
 
     @OptIn(ExperimentalMaterial3AdaptiveApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -82,9 +82,10 @@ class MainActivity : ComponentActivity() {
         Graph.provide(this)
         enableEdgeToEdge()
         
-        if (intent?.getStringExtra("ACTION") == "quick_add" || intent?.action == "com.example.myexpenditureapp.QUICK_ADD") {
-            isQuickAddLaunched.value = true
-        }
+        val action = intent?.getStringExtra("shortcut_action") 
+            ?: intent?.getStringExtra("ACTION") 
+            ?: if (intent?.action == "com.example.myexpenditureapp.QUICK_ADD") "quick_add" else null
+        pendingShortcutAction.value = action
 
         NotificationHelper.createNotificationChannels(this)
         NotificationHelper.scheduleWorkers(this)
@@ -100,22 +101,23 @@ class MainActivity : ComponentActivity() {
         requestPermissionLauncher.launch(permissions.toTypedArray())
 
         setContent {
-            MainScreen(openQuickAdd = isQuickAddLaunched.value)
+            MainScreen(shortcutAction = pendingShortcutAction.value)
         }
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (intent.getStringExtra("ACTION") == "quick_add" || intent.action == "com.example.myexpenditureapp.QUICK_ADD") {
-            isQuickAddLaunched.value = true
-        }
+        val action = intent.getStringExtra("shortcut_action") 
+            ?: intent.getStringExtra("ACTION") 
+            ?: if (intent.action == "com.example.myexpenditureapp.QUICK_ADD") "quick_add" else null
+        pendingShortcutAction.value = action
     }
 }
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-fun MainScreen(openQuickAdd: Boolean = false) {
+fun MainScreen(shortcutAction: String? = null) {
     val themeViewModel: ThemeViewModel = viewModel()
     val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
     val backStack = rememberNavBackStack(Route.AccountList)
@@ -124,9 +126,26 @@ fun MainScreen(openQuickAdd: Boolean = false) {
     )
     val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(openQuickAdd) {
-        if (openQuickAdd && backStack.lastOrNull() !is Route.TransactionEdit) {
-            backStack.add(Route.TransactionEdit())
+    LaunchedEffect(shortcutAction) {
+        when (shortcutAction) {
+            "quick_add" -> {
+                if (backStack.lastOrNull() !is Route.TransactionEdit) {
+                    backStack.add(Route.TransactionEdit())
+                }
+            }
+            "analytics" -> {
+                backStack.clear()
+                backStack.add(Route.Analytics)
+            }
+            "goals" -> {
+                if (backStack.lastOrNull() !is Route.GoalList) {
+                    backStack.add(Route.GoalList)
+                }
+            }
+            "transactions" -> {
+                backStack.clear()
+                backStack.add(Route.TransactionList)
+            }
         }
     }
 
@@ -181,6 +200,7 @@ fun MainScreen(openQuickAdd: Boolean = false) {
                             onAddAccount = { backStack.add(Route.AccountEdit()) },
                             onEditAccount = { backStack.add(Route.AccountEdit(it.id)) },
                             onReviewTransaction = { backStack.add(Route.TransactionReview(it.id)) },
+                            onOpenSmartInbox = { backStack.add(Route.SmartInbox) },
                             onOpenGoals = { backStack.add(Route.GoalList) }
                         )
                     }
@@ -425,6 +445,16 @@ fun MainScreen(openQuickAdd: Boolean = false) {
                     ) {
                         SubscriptionListScreen(
                             onNavigateBack = { backStack.removeLastOrNull() }
+                        )
+                    }
+                    entry<Route.SmartInbox>(
+                        metadata = ListDetailSceneStrategy.detailPane()
+                    ) {
+                        val transactionViewModel: TransactionViewModel = viewModel()
+                        SmartInboxScreen(
+                            viewModel = transactionViewModel,
+                            onReviewTransaction = { backStack.add(Route.TransactionReview(it.id)) },
+                            onBack = { backStack.removeLastOrNull() }
                         )
                     }
                 }

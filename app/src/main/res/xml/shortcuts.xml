@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="quick_add"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_add"
+        android:shortcutShortLabel="@string/shortcut_add_short"
+        android:shortcutLongLabel="@string/shortcut_add_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.example.myexpenditureapp"
+            android:targetClass="com.example.myexpenditureapp.MainActivity">
+            <extra
+                android:name="shortcut_action"
+                android:value="quick_add" />
+        </intent>
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="analytics"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_analytics"
+        android:shortcutShortLabel="@string/shortcut_analytics_short"
+        android:shortcutLongLabel="@string/shortcut_analytics_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.example.myexpenditureapp"
+            android:targetClass="com.example.myexpenditureapp.MainActivity">
+            <extra
+                android:name="shortcut_action"
+                android:value="analytics" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="goals"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_goals"
+        android:shortcutShortLabel="@string/shortcut_goals_short"
+        android:shortcutLongLabel="@string/shortcut_goals_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.example.myexpenditureapp"
+            android:targetClass="com.example.myexpenditureapp.MainActivity">
+            <extra
+                android:name="shortcut_action"
+                android:value="goals" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="transactions"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_transactions"
+        android:shortcutShortLabel="@string/shortcut_transactions_short"
+        android:shortcutLongLabel="@string/shortcut_transactions_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.example.myexpenditureapp"
+            android:targetClass="com.example.myexpenditureapp.MainActivity">
+            <extra
+                android:name="shortcut_action"
+                android:value="transactions" />
+        </intent>
+    </shortcut>
+</shortcuts>

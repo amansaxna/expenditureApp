@@ -170,4 +170,39 @@ class SmsParserTest {
         assertEquals("BIG BAZAAR", parsed.merchant)
         assertEquals("Expense", parsed.type)
     }
+
+    @Test
+    fun testRejectPromotionalDiscountSms() {
+        val message = "SEPT500 is still yours 🎟️. Use it before it's gone and get FLAT ₹500 OFF. Maybelline New York Super Stay Matte Ink Liquid Lipstick, Lasts Up to 16 Hours - 15 Lover is waiting."
+        val parsed = SmsParser.parse(message)
+        org.junit.Assert.assertNull(parsed)
+    }
+
+    @Test
+    fun testRejectOtpSms() {
+        val message = "Your OTP for transaction of Rs. 500 at Swiggy is 123456. Do not share this OTP with anyone."
+        val parsed = SmsParser.parse(message)
+        org.junit.Assert.assertNull(parsed)
+    }
+
+    @Test
+    fun testRejectLoanSpamSms() {
+        val message = "Congratulations! You have a pre-approved personal loan of Rs. 500000. Apply now at http://loan.xyz"
+        val parsed = SmsParser.parse(message)
+        org.junit.Assert.assertNull(parsed)
+    }
+
+    @Test
+    fun testRejectRechargeReminderSms() {
+        val message = "Your plan expires today. Recharge now for Rs. 299 to continue uninterrupted 5G data."
+        val parsed = SmsParser.parse(message)
+        org.junit.Assert.assertNull(parsed)
+    }
+
+    @Test
+    fun testRejectRandomChat() {
+        val message = "Hey bro, send me ₹500 when you are free"
+        val parsed = SmsParser.parse(message)
+        org.junit.Assert.assertNull(parsed)
+    }
 }
