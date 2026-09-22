@@ -40,7 +40,10 @@ import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AnalyticsScreen(viewModel: AnalyticsViewModel) {
+fun AnalyticsScreen(
+    viewModel: AnalyticsViewModel,
+    settlementViewModel: com.example.myexpenditureapp.ui.viewmodel.MonthlySettlementViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+) {
     val categorySpending by viewModel.categorySpending.collectAsStateWithLifecycle(initialValue = emptyMap())
     val weeklySpending by viewModel.weeklySpending.collectAsStateWithLifecycle(initialValue = emptyMap())
     val monthlyComparison by viewModel.monthlyComparison.collectAsStateWithLifecycle(initialValue = emptyMap())
@@ -56,6 +59,10 @@ fun AnalyticsScreen(viewModel: AnalyticsViewModel) {
     val drillDownTransactions by viewModel.drillDownTransactions.collectAsStateWithLifecycle(initialValue = emptyList())
     val categorySubBreakdown by viewModel.categorySubBreakdown.collectAsStateWithLifecycle(initialValue = emptyMap())
     val isParentRollupEnabled by viewModel.isParentRollupEnabled.collectAsStateWithLifecycle()
+
+    val unsettledSummary by settlementViewModel.unsettledMonthSummary.collectAsStateWithLifecycle()
+    val isSettlementSheetVisible by settlementViewModel.isBottomSheetVisible.collectAsStateWithLifecycle()
+    val activeGoals by settlementViewModel.activeGoals.collectAsStateWithLifecycle()
 
     val context = androidx.compose.ui.platform.LocalContext.current
     val haptic = LocalHapticFeedback.current
@@ -143,6 +150,17 @@ fun AnalyticsScreen(viewModel: AnalyticsViewModel) {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             viewModel.drillDownInsight(ins)
                         }
+                    )
+                }
+            }
+
+            // Month-End Settlement Banner in Macro Analytics
+            if (unsettledSummary != null && drillState.level == DrillLevel.MACRO) {
+                item {
+                    com.example.myexpenditureapp.ui.component.MonthEndSettlementBanner(
+                        summary = unsettledSummary!!,
+                        onReviewClick = { settlementViewModel.showSettlementSheet() },
+                        onDismissClick = { settlementViewModel.dismissBanner() }
                     )
                 }
             }
@@ -452,6 +470,17 @@ fun AnalyticsScreen(viewModel: AnalyticsViewModel) {
                 onSourceSelect = { viewModel.onSourceFilterChange(it) }
             )
             Spacer(modifier = Modifier.height(32.dp))
+        }
+
+        if (isSettlementSheetVisible && unsettledSummary != null) {
+            com.example.myexpenditureapp.ui.component.MonthEndSettlementBottomSheet(
+                summary = unsettledSummary!!,
+                activeGoals = activeGoals,
+                onDismissRequest = { settlementViewModel.hideSettlementSheet() },
+                onSweepToGoal = { goalId, amt -> settlementViewModel.sweepToGoal(goalId, amt) },
+                onRolloverToBudget = { amt -> settlementViewModel.rolloverToBudget(amt) },
+                onCleanSlate = { amt -> settlementViewModel.settleCleanSlate(amt) }
+            )
         }
     }
 }

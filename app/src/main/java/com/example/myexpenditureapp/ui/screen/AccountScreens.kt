@@ -72,7 +72,8 @@ fun AccountListScreen(
     onEditAccount: (Account) -> Unit,
     onReviewTransaction: (Transaction) -> Unit,
     onOpenSmartInbox: () -> Unit = {},
-    onOpenGoals: () -> Unit = {}
+    onOpenGoals: () -> Unit = {},
+    settlementViewModel: com.example.myexpenditureapp.ui.viewmodel.MonthlySettlementViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
     val accounts by accountViewModel.accounts.collectAsStateWithLifecycle()
     val unreviewedTransactions by transactionViewModel.unreviewedTransactions.collectAsStateWithLifecycle()
@@ -80,6 +81,11 @@ fun AccountListScreen(
     val txUiState by transactionViewModel.uiState.collectAsStateWithLifecycle()
     val categories by budgetViewModel.allCategories.collectAsStateWithLifecycle()
     val goals by com.example.myexpenditureapp.data.Graph.savingGoalRepository.getAllGoals().collectAsStateWithLifecycle(initialValue = emptyList())
+    
+    val unsettledSummary by settlementViewModel.unsettledMonthSummary.collectAsStateWithLifecycle()
+    val isSettlementBannerDismissed by settlementViewModel.isBannerDismissed.collectAsStateWithLifecycle()
+    val isSettlementSheetVisible by settlementViewModel.isBottomSheetVisible.collectAsStateWithLifecycle()
+    val activeGoals by settlementViewModel.activeGoals.collectAsStateWithLifecycle()
     
     val totalBudget = budgetsWithProgress.fold(BigDecimal.ZERO) { acc, b -> acc.add(b.budget.limitAmount) }
     val totalSpent = budgetsWithProgress.fold(BigDecimal.ZERO) { acc, b -> acc.add(b.currentSpending) }
@@ -222,6 +228,17 @@ fun AccountListScreen(
                             }
                         }
                     }
+                }
+            }
+
+            // Month-End Settlement Banner (Model A: Interactive Wrap & Settle)
+            if (unsettledSummary != null && !isSettlementBannerDismissed) {
+                item {
+                    com.example.myexpenditureapp.ui.component.MonthEndSettlementBanner(
+                        summary = unsettledSummary!!,
+                        onReviewClick = { settlementViewModel.showSettlementSheet() },
+                        onDismissClick = { settlementViewModel.dismissBanner() }
+                    )
                 }
             }
 
@@ -418,6 +435,18 @@ fun AccountListScreen(
                     }
                 }
             }
+        }
+
+        // Month-End Settlement Bottom Sheet Modal
+        if (isSettlementSheetVisible && unsettledSummary != null) {
+            com.example.myexpenditureapp.ui.component.MonthEndSettlementBottomSheet(
+                summary = unsettledSummary!!,
+                activeGoals = activeGoals,
+                onDismissRequest = { settlementViewModel.hideSettlementSheet() },
+                onSweepToGoal = { goalId, amt -> settlementViewModel.sweepToGoal(goalId, amt) },
+                onRolloverToBudget = { amt -> settlementViewModel.rolloverToBudget(amt) },
+                onCleanSlate = { amt -> settlementViewModel.settleCleanSlate(amt) }
+            )
         }
     }
 }
