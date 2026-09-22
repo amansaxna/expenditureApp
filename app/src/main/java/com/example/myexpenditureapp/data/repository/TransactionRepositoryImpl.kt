@@ -56,6 +56,7 @@ class TransactionRepositoryImpl(
                 transactionDao.insertTransaction(transaction)
             }
         }
+        com.example.myexpenditureapp.notifications.LiveStatusNotificationManager.refresh()
     }
 
     override suspend fun deleteTransaction(transaction: Transaction) {
@@ -64,6 +65,7 @@ class TransactionRepositoryImpl(
             adjustBalances(transaction, -1)
             transactionDao.deleteTransaction(transaction)
         }
+        com.example.myexpenditureapp.notifications.LiveStatusNotificationManager.refresh()
     }
 
     private suspend fun adjustBalances(transaction: Transaction, multiplier: Int) {

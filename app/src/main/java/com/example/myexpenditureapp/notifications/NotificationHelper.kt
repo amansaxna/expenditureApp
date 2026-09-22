@@ -26,9 +26,35 @@ object NotificationHelper {
     const val CHANNEL_DAILY = "channel_daily"
     const val CHANNEL_MONTHLY = "channel_monthly"
     const val CHANNEL_SUBSCRIPTION = "channel_subscription"
+    const val CHANNEL_LIVE_STATUS = "channel_live_status"
+
+    const val NOTIFICATION_ID_LIVE_STATUS = 999
+    private const val PREFS_NOTIFICATION = "app_notification_prefs"
+    private const val KEY_LIVE_STATUS_ENABLED = "live_status_notification_enabled"
+
+    fun isLiveStatusEnabled(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NOTIFICATION, Context.MODE_PRIVATE)
+            .getBoolean(KEY_LIVE_STATUS_ENABLED, true)
+    }
+
+    fun setLiveStatusEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS_NOTIFICATION, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_LIVE_STATUS_ENABLED, enabled)
+            .apply()
+    }
 
     fun createNotificationChannels(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val liveStatusChannel = NotificationChannel(
+                CHANNEL_LIVE_STATUS,
+                "Live Expenditure & Shortcuts",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Persistent ambient view of daily and monthly expenditure with quick shortcuts"
+                setShowBadge(false)
+            }
+
             val reviewChannel = NotificationChannel(
                 CHANNEL_REVIEW,
                 "Transaction Review",
@@ -70,7 +96,7 @@ object NotificationHelper {
             }
 
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannels(listOf(reviewChannel, budgetChannel, subscriptionChannel, dailyChannel, monthlyChannel))
+            manager.createNotificationChannels(listOf(liveStatusChannel, reviewChannel, budgetChannel, subscriptionChannel, dailyChannel, monthlyChannel))
         }
     }
 
@@ -330,6 +356,132 @@ object NotificationHelper {
             ExistingPeriodicWorkPolicy.KEEP,
             subscriptionRequest
         )
+
+        // Live Status Midnight Rollover Worker - Periodic every 6 hours
+        val liveStatusRequest = PeriodicWorkRequestBuilder<LiveStatusWorker>(6, TimeUnit.HOURS)
+            .build()
+
+        workManager.enqueueUniquePeriodicWork(
+            "LiveStatusRollover",
+            ExistingPeriodicWorkPolicy.KEEP,
+            liveStatusRequest
+        )
+    }
+
+    @SuppressLint("MissingPermission")
+    fun showLiveStatusNotification(
+        context: Context,
+        todaySpent: BigDecimal,
+        monthlySpent: BigDecimal,
+        monthlyBudget: BigDecimal,
+        remainingDays: Int
+    ) {
+        if (!hasPostNotificationPermission(context)) return
+        if (!isLiveStatusEnabled(context)) {
+            cancelLiveStatusNotification(context)
+            return
+        }
+
+        val formattedToday = todaySpent.formatIndian()
+        val formattedMonth = monthlySpent.formatIndian()
+
+        val budgetExists = monthlyBudget > BigDecimal.ZERO
+        val budgetPercent = if (budgetExists) {
+            monthlySpent.multiply(BigDecimal(100))
+                .divide(monthlyBudget, 0, java.math.RoundingMode.HALF_UP)
+                .toInt()
+        } else 0
+
+        val remainingBudget = if (budgetExists) monthlyBudget.subtract(monthlySpent).max(BigDecimal.ZERO) else BigDecimal.ZERO
+        val formattedRemaining = remainingBudget.formatIndian()
+
+        // 1. Content Intent -> Open Dashboard
+        val openAppIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val openAppPendingIntent = PendingIntent.getActivity(
+            context, 901, openAppIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        // 2. Action: ➕ Quick Add
+        val quickAddIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("shortcut_action", "quick_add")
+        }
+        val quickAddPendingIntent = PendingIntent.getActivity(
+            context, 902, quickAddIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        // 3. Action: 📊 Analytics
+        val analyticsIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("shortcut_action", "analytics")
+        }
+        val analyticsPendingIntent = PendingIntent.getActivity(
+            context, 903, analyticsIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        // 4. Action: 📥 Smart Inbox
+        val inboxIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("shortcut_action", "smart_inbox")
+        }
+        val inboxPendingIntent = PendingIntent.getActivity(
+            context, 904, inboxIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val contentTitle = "Today: $formattedToday • Month: $formattedMonth"
+        val contentText = if (budgetExists) {
+            "$formattedRemaining left ($budgetPercent% used) • $remainingDays days left"
+        } else {
+            "$remainingDays days remaining in month"
+        }
+
+        val bigText = if (budgetExists) {
+            "📊 Today's Outflow: $formattedToday\n📅 Month Spent: $formattedMonth ($budgetPercent% of ${monthlyBudget.formatIndian()})\n💰 Budget Left: $formattedRemaining ($remainingDays days remaining)"
+        } else {
+            "📊 Today's Outflow: $formattedToday\n📅 Month Spent: $formattedMonth\n⏳ $remainingDays days remaining in month"
+        }
+
+        val bigTextStyle = NotificationCompat.BigTextStyle()
+            .setBigContentTitle("SpendZen: $contentTitle")
+            .bigText(bigText)
+            .setSummaryText("Live Status")
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_LIVE_STATUS)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(contentTitle)
+            .setContentText(contentText)
+            .setStyle(bigTextStyle)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setContentIntent(openAppPendingIntent)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setAutoCancel(false)
+            .setColor(0xFF6366F1.toInt())
+            .addAction(R.drawable.ic_launcher_foreground, "➕ Add", quickAddPendingIntent)
+            .addAction(R.drawable.ic_launcher_foreground, "📊 Stats", analyticsPendingIntent)
+            .addAction(R.drawable.ic_launcher_foreground, "📥 Inbox", inboxPendingIntent)
+
+        if (budgetExists) {
+            builder.setProgress(100, budgetPercent.coerceIn(0, 100), false)
+        }
+
+        try {
+            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID_LIVE_STATUS, builder.build())
+        } catch (e: SecurityException) {
+        }
+    }
+
+    fun cancelLiveStatusNotification(context: Context) {
+        try {
+            NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID_LIVE_STATUS)
+        } catch (e: Exception) {
+        }
     }
 
     fun triggerBudgetCheck(context: Context) {

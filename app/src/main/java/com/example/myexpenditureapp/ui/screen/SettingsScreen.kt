@@ -70,6 +70,9 @@ fun SettingsScreen(
     var isNotificationAccessGranted by remember {
         mutableStateOf(com.example.myexpenditureapp.notifications.NotificationHelper.isNotificationListenerAccessGranted(context))
     }
+    var isLiveStatusNotificationEnabled by remember {
+        mutableStateOf(com.example.myexpenditureapp.notifications.NotificationHelper.isLiveStatusEnabled(context))
+    }
 
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
@@ -237,6 +240,44 @@ fun SettingsScreen(
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                            }
+                        )
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                            thickness = 0.5.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
+                        )
+
+                        SettingsNavigationRow(
+                            title = "Always-On Live Status",
+                            subtitle = "Ambient daily & monthly spend status with shortcuts in notification tray",
+                            icon = Icons.Default.Notifications,
+                            trailingContent = {
+                                Switch(
+                                    checked = isLiveStatusNotificationEnabled,
+                                    onCheckedChange = { isChecked ->
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        isLiveStatusNotificationEnabled = isChecked
+                                        com.example.myexpenditureapp.notifications.NotificationHelper.setLiveStatusEnabled(context, isChecked)
+                                        if (isChecked) {
+                                            com.example.myexpenditureapp.notifications.LiveStatusNotificationManager.refresh(context)
+                                        } else {
+                                            com.example.myexpenditureapp.notifications.NotificationHelper.cancelLiveStatusNotification(context)
+                                        }
+                                    }
+                                )
+                            },
+                            onClick = {
+                                val next = !isLiveStatusNotificationEnabled
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                isLiveStatusNotificationEnabled = next
+                                com.example.myexpenditureapp.notifications.NotificationHelper.setLiveStatusEnabled(context, next)
+                                if (next) {
+                                    com.example.myexpenditureapp.notifications.LiveStatusNotificationManager.refresh(context)
+                                } else {
+                                    com.example.myexpenditureapp.notifications.NotificationHelper.cancelLiveStatusNotification(context)
+                                }
                             }
                         )
 

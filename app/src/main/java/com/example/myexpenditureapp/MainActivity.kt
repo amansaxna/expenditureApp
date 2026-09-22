@@ -102,6 +102,7 @@ class MainActivity : ComponentActivity() {
 
         NotificationHelper.createNotificationChannels(this)
         NotificationHelper.scheduleWorkers(this)
+        com.example.myexpenditureapp.notifications.LiveStatusNotificationManager.refresh(this)
 
         val permissions = mutableListOf(
             Manifest.permission.RECEIVE_SMS,
@@ -168,6 +169,11 @@ fun MainScreen(shortcutAction: String? = null) {
             "subscriptions" -> {
                 if (backStack.lastOrNull() !is Route.SubscriptionList) {
                     backStack.add(Route.SubscriptionList)
+                }
+            }
+            "smart_inbox" -> {
+                if (backStack.lastOrNull() !is Route.SmartInbox) {
+                    backStack.add(Route.SmartInbox)
                 }
             }
         }
