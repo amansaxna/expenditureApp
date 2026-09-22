@@ -9,6 +9,7 @@ import com.example.myexpenditureapp.domain.radar.RadarBillItem
 import com.example.myexpenditureapp.domain.radar.SubscriptionRadarEngine
 import com.example.myexpenditureapp.domain.radar.SubscriptionRadarSummary
 import com.example.myexpenditureapp.domain.radar.SubscriptionSuggestion
+import com.example.myexpenditureapp.notifications.NotificationHelper
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -94,6 +95,7 @@ class SubscriptionViewModel : ViewModel() {
                     subscriptionRepo.updateSubscription(subscription)
                     _eventChannel.send(UiEvent.ShowSnackbar("Subscription updated"))
                 }
+                NotificationHelper.triggerSubscriptionCheck(Graph.appContext)
                 _eventChannel.send(UiEvent.Success)
             } catch (e: Exception) {
                 _eventChannel.send(UiEvent.ShowSnackbar("Error saving: ${e.localizedMessage}"))
@@ -127,6 +129,7 @@ class SubscriptionViewModel : ViewModel() {
 
                 transactionRepo.saveTransaction(tx)
                 subscriptionRepo.updateSubscription(sub.copy(lastPaidDate = now))
+                NotificationHelper.triggerSubscriptionCheck(Graph.appContext)
 
                 _eventChannel.send(UiEvent.ShowSnackbar("Payment logged for ${sub.name} (₹${sub.amount})"))
             } catch (e: Exception) {

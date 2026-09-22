@@ -16,6 +16,7 @@ import androidx.glance.unit.ColorProvider
 import androidx.glance.GlanceTheme
 import com.example.myexpenditureapp.MainActivity
 import com.example.myexpenditureapp.data.Graph
+import com.example.myexpenditureapp.utils.formatIndian
 import kotlinx.coroutines.flow.first
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -67,6 +68,29 @@ class ExpenditureWidget : GlanceAppWidget() {
             BigDecimal.ZERO
         }
 
+        val daysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH).coerceAtLeast(28)
+
+        val last7Days = (6 downTo 0).map { dayOffset ->
+            val dCal = Calendar.getInstance().apply {
+                add(Calendar.DAY_OF_YEAR, -dayOffset)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            val dStart = dCal.timeInMillis
+            val dEnd = dStart + 86400000L
+            val daySpend = transactions.filter { it.type == "Expense" && it.timestamp in dStart until dEnd }
+                .fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) }
+            val dayLabel = dCal.getDisplayName(Calendar.DAY_OF_WEEK, Calendar.SHORT, Locale.getDefault())?.take(1) ?: "D"
+            Pair(dayLabel, daySpend)
+        }
+        val max7DaySpend = last7Days.maxOfOrNull { it.second }?.coerceAtLeast(BigDecimal("500")) ?: BigDecimal("500")
+        val normalized7Days = last7Days.map { (label, spend) ->
+            val ratio = spend.divide(max7DaySpend, 2, RoundingMode.HALF_UP).toFloat().coerceIn(0.12f, 1.0f)
+            Pair(label, ratio)
+        }
+
         provideContent {
             WidgetContent(
                 totalBalance = totalBalance,
@@ -74,7 +98,10 @@ class ExpenditureWidget : GlanceAppWidget() {
                 netFlow = netFlow,
                 todayExpense = todayExpense,
                 dailyAverage = dailyAverage,
-                pendingReviewCount = unreviewed.size
+                pendingReviewCount = unreviewed.size,
+                currentDay = currentDay,
+                daysInMonth = daysInMonth,
+                normalized7Days = normalized7Days
             )
         }
     }
@@ -86,7 +113,10 @@ class ExpenditureWidget : GlanceAppWidget() {
         netFlow: BigDecimal,
         todayExpense: BigDecimal,
         dailyAverage: BigDecimal,
-        pendingReviewCount: Int
+        pendingReviewCount: Int,
+        currentDay: Int,
+        daysInMonth: Int,
+        normalized7Days: List<Pair<String, Float>>
     ) {
         GlanceTheme {
             Column(
@@ -145,7 +175,7 @@ class ExpenditureWidget : GlanceAppWidget() {
                 ) {
                     Column(modifier = GlanceModifier.defaultWeight()) {
                         Text(
-                            text = "₹${totalBalance.setScale(0, RoundingMode.HALF_UP)}",
+                            text = totalBalance.formatIndian(),
                             style = TextStyle(
                                 fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold,
@@ -163,7 +193,7 @@ class ExpenditureWidget : GlanceAppWidget() {
 
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
-                            text = "${if (netFlow >= BigDecimal.ZERO) "+" else ""}₹${netFlow.setScale(0, RoundingMode.HALF_UP)}",
+                            text = "${if (netFlow >= BigDecimal.ZERO) "+" else ""}${netFlow.formatIndian()}",
                             style = TextStyle(
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
@@ -199,7 +229,7 @@ class ExpenditureWidget : GlanceAppWidget() {
                             style = TextStyle(fontSize = 9.sp, color = GlanceTheme.colors.onSurfaceVariant)
                         )
                         Text(
-                            text = "₹${todayExpense.setScale(0, RoundingMode.HALF_UP)}",
+                            text = todayExpense.formatIndian(),
                             style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onSurface)
                         )
                     }
@@ -210,7 +240,7 @@ class ExpenditureWidget : GlanceAppWidget() {
                             style = TextStyle(fontSize = 9.sp, color = GlanceTheme.colors.onSurfaceVariant)
                         )
                         Text(
-                            text = "₹${dailyAverage.setScale(0, RoundingMode.HALF_UP)}/d",
+                            text = "${dailyAverage.formatIndian()}/d",
                             style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onSurface)
                         )
                     }
@@ -221,9 +251,82 @@ class ExpenditureWidget : GlanceAppWidget() {
                             style = TextStyle(fontSize = 9.sp, color = GlanceTheme.colors.onSurfaceVariant)
                         )
                         Text(
-                            text = "₹${monthlyExpense.setScale(0, RoundingMode.HALF_UP)}",
+                            text = monthlyExpense.formatIndian(),
                             style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onSurface)
                         )
+                    }
+                }
+
+                Spacer(modifier = GlanceModifier.height(8.dp))
+
+                // Minimalist 7-Day Outflow Trend & Pacing Card for Widget
+                Column(
+                    modifier = GlanceModifier
+                        .fillMaxWidth()
+                        .background(GlanceTheme.colors.surfaceVariant)
+                        .padding(8.dp)
+                ) {
+                    Row(
+                        modifier = GlanceModifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "7-DAY OUTFLOW TREND",
+                            style = TextStyle(
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = GlanceTheme.colors.onSurfaceVariant
+                            )
+                        )
+                        Spacer(modifier = GlanceModifier.defaultWeight())
+                        Text(
+                            text = "Day $currentDay of $daysInMonth",
+                            style = TextStyle(
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = GlanceTheme.colors.primary
+                            )
+                        )
+                    }
+
+                    Spacer(modifier = GlanceModifier.height(8.dp))
+
+                    // Minimalist 7-Day Bars
+                    Row(
+                        modifier = GlanceModifier
+                            .fillMaxWidth()
+                            .height(34.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        normalized7Days.forEachIndexed { index, pair ->
+                            val label = pair.first
+                            val ratio = pair.second
+                            val isToday = index == normalized7Days.lastIndex
+                            val barHeightDp = (ratio * 24).toInt().coerceIn(4, 24).dp
+
+                            Column(
+                                modifier = GlanceModifier.defaultWeight(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalAlignment = Alignment.Bottom
+                            ) {
+                                Box(
+                                    modifier = GlanceModifier
+                                        .width(10.dp)
+                                        .height(barHeightDp)
+                                        .background(if (isToday) GlanceTheme.colors.primary else GlanceTheme.colors.outline)
+                                ) {}
+                                Spacer(modifier = GlanceModifier.height(3.dp))
+                                Text(
+                                    text = label,
+                                    style = TextStyle(
+                                        fontSize = 8.sp,
+                                        fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isToday) GlanceTheme.colors.primary else GlanceTheme.colors.onSurfaceVariant
+                                    )
+                                )
+                            }
+                        }
                     }
                 }
             }

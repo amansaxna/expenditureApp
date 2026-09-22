@@ -54,7 +54,7 @@ fun CalculatorTextField(
             }
         },
         singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text) // Allow +, -, *, /
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
     )
 }
 

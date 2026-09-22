@@ -8,6 +8,7 @@ import com.example.myexpenditureapp.data.entity.Category
 import com.example.myexpenditureapp.data.entity.Transaction
 import com.example.myexpenditureapp.domain.insights.InsightsEngine
 import com.example.myexpenditureapp.domain.insights.SmartInsight
+import com.example.myexpenditureapp.utils.formatIndian
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.*
@@ -67,8 +68,8 @@ class AnalyticsViewModel : ViewModel() {
     val budgets: StateFlow<List<com.example.myexpenditureapp.data.entity.Budget>> = budgetRepository.getAllBudgets()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val insights: Flow<List<SmartInsight>> = combine(transactions, categories, budgets) { txs, cats, buds ->
-        InsightsEngine.generateInsights(txs, cats, buds)
+    val insights: Flow<List<SmartInsight>> = combine(transactions, categories, budgets, accounts) { txs, cats, buds, accs ->
+        InsightsEngine.generateInsights(txs, cats, buds, accs)
     }
 
     val filteredTransactions = combine(transactions, _filterState) { txs, filters ->
@@ -418,10 +419,10 @@ class AnalyticsViewModel : ViewModel() {
         val budgetUsed = totalExpenses.divide(budgetLimit, 4, RoundingMode.HALF_UP).multiply(BigDecimal(100))
 
         listOf(
-            KPI("Net Flow", "₹${netCashFlow.setScale(0, RoundingMode.HALF_UP)}", "Income - Exp"),
+            KPI("Net Flow", netCashFlow.formatIndian(), "Income - Exp"),
             KPI("Top Category", highestCategory, "Most spent"),
-            KPI("Monthly Spend", "₹${totalExpenses.setScale(0, RoundingMode.HALF_UP)}", "Budget: ${budgetUsed.setScale(0, RoundingMode.HALF_UP)}%"),
-            KPI("Projected", "₹${projection.setScale(0, RoundingMode.HALF_UP)}", "End of month")
+            KPI("Monthly Spend", totalExpenses.formatIndian(), "Budget: ${budgetUsed.setScale(0, RoundingMode.HALF_UP)}%"),
+            KPI("Projected", projection.formatIndian(), "End of month")
         )
     }
 

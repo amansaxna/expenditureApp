@@ -31,6 +31,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myexpenditureapp.data.entity.SavingGoal
 import com.example.myexpenditureapp.ui.theme.*
 import com.example.myexpenditureapp.ui.viewmodel.GoalViewModel
+import com.example.myexpenditureapp.utils.formatIndian
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.SimpleDateFormat
@@ -179,14 +180,14 @@ fun GoalListScreen(
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        "₹${totalSaved.toPlainString()}",
+                                        totalSaved.formatIndian(),
                                         style = MaterialTheme.typography.headlineMedium,
                                         fontWeight = FontWeight.Black,
                                         fontFamily = MonospaceFont,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        "Target: ₹${totalTarget.toPlainString()} across ${goals.size} vaults",
+                                        "Target: ${totalTarget.formatIndian()} across ${goals.size} vaults",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -273,7 +274,11 @@ fun GoalCard(
     val progress = if (goal.targetAmount > BigDecimal.ZERO) {
         goal.currentAmount.divide(goal.targetAmount, 4, RoundingMode.HALF_UP).toFloat().coerceIn(0f, 1f)
     } else 0f
-    val animatedProgress by animateFloatAsState(targetValue = progress, label = "goalProgress")
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = androidx.compose.animation.core.tween(800, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+        label = "goalProgress"
+    )
     val percentInt = (progress * 100).toInt()
     val isDone = goal.isCompleted || progress >= 1f
 
@@ -370,7 +375,7 @@ fun GoalCard(
                         letterSpacing = 0.5.sp
                     )
                     Text(
-                        "₹${goal.currentAmount.toPlainString()}",
+                        goal.currentAmount.formatIndian(),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Black,
                         fontFamily = MonospaceFont,
@@ -379,7 +384,7 @@ fun GoalCard(
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        "TARGET: ₹${goal.targetAmount.toPlainString()}",
+                        "TARGET: ${goal.targetAmount.formatIndian()}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontFamily = MonospaceFont,
@@ -574,7 +579,7 @@ fun FundTransferDialog(
                     ) {
                         Text("Current Balance", style = MaterialTheme.typography.bodySmall)
                         Text(
-                            "₹${goal.currentAmount.toPlainString()}",
+                            goal.currentAmount.formatIndian(),
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Bold,
                             fontFamily = MonospaceFont
@@ -615,7 +620,7 @@ fun FundTransferDialog(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    "+₹$pill",
+                                    "+${pill.formatIndian()}",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = MonospaceFont,

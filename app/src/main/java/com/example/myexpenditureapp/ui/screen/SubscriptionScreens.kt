@@ -33,6 +33,7 @@ import com.example.myexpenditureapp.domain.radar.RadarStatus
 import com.example.myexpenditureapp.domain.radar.SubscriptionSuggestion
 import com.example.myexpenditureapp.ui.viewmodel.SubscriptionViewModel
 import com.example.myexpenditureapp.ui.viewmodel.UiEvent
+import com.example.myexpenditureapp.utils.formatIndian
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.SimpleDateFormat
@@ -274,7 +275,7 @@ fun RadarForecastCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "₹${totalMonthly.setScale(0, RoundingMode.HALF_UP)}",
+                        text = totalMonthly.formatIndian(),
                         style = MaterialTheme.typography.headlineMedium.copy(
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
@@ -288,7 +289,7 @@ fun RadarForecastCard(
                         color = MaterialTheme.colorScheme.errorContainer
                     ) {
                         Text(
-                            text = "Overdue: ₹${overdueAmount.setScale(0, RoundingMode.HALF_UP)}",
+                            text = "Overdue: ${overdueAmount.formatIndian()}",
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onErrorContainer
@@ -319,7 +320,7 @@ fun RadarForecastCard(
                         )
                     }
                     Text(
-                        text = "₹${upcoming7Days.setScale(0, RoundingMode.HALF_UP)}",
+                        text = upcoming7Days.formatIndian(),
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
@@ -343,7 +344,7 @@ fun RadarForecastCard(
                         )
                     }
                     Text(
-                        text = "₹${paidThisMonth.setScale(0, RoundingMode.HALF_UP)}",
+                        text = paidThisMonth.formatIndian(),
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace,
@@ -396,7 +397,7 @@ fun SuggestionCard(
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                 )
                 Text(
-                    text = "₹${suggestion.estimatedAmount.setScale(0, RoundingMode.HALF_UP)}/mo • Due ~${suggestion.detectedDueDay}th (${suggestion.occurrences}x detected)",
+                    text = "${suggestion.estimatedAmount.formatIndian()}/mo • Due ~${suggestion.detectedDueDay}th (${suggestion.occurrences}x detected)",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -513,7 +514,7 @@ fun BillRadarRow(
             // Amount & Action
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = "₹${item.subscription.amount.setScale(0, RoundingMode.HALF_UP)}",
+                    text = item.subscription.amount.formatIndian(),
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace

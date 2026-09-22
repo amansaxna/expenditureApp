@@ -52,6 +52,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.SimpleDateFormat
 import java.util.*
+import com.example.myexpenditureapp.utils.formatIndian
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -700,7 +701,7 @@ private fun CompactSummaryItem(
         }
         Spacer(modifier = Modifier.height(2.dp))
         Text(
-            text = "₹${amount.setScale(0, java.math.RoundingMode.HALF_UP)}",
+            text = amount.formatIndian(includeSymbol = true, includeDecimals = false),
             style = MaterialTheme.typography.bodyMedium.copy(fontFamily = MonospaceFont),
             fontWeight = FontWeight.ExtraBold,
             color = color
@@ -799,7 +800,7 @@ fun DayHeader(
             }
             if (group.totalExpense > BigDecimal.ZERO) {
                 Text(
-                    text = "-₹${group.totalExpense.setScale(0, RoundingMode.HALF_UP)}",
+                    text = "-${group.totalExpense.formatIndian(includeSymbol = true, includeDecimals = false)}",
                     style = MaterialTheme.typography.labelMedium.copy(fontFamily = MonospaceFont, fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -824,7 +825,10 @@ fun TransactionEditScreen(
     var type by remember { mutableStateOf(transaction?.type ?: "Expense") }
     var accountId by remember { mutableStateOf(transaction?.accountId ?: accounts.firstOrNull()?.id ?: 0L) }
     var toAccountId by remember { mutableStateOf(transaction?.toAccountId ?: accounts.firstOrNull()?.id ?: 0L) }
-    var categoryId by remember { mutableStateOf(transaction?.categoryId) }
+    val defaultMiscId = remember(categories) {
+        categories.find { it.name.equals("Miscellaneous", ignoreCase = true) || it.name.equals("Misc", ignoreCase = true) }?.id
+    }
+    var categoryId by remember { mutableStateOf(transaction?.categoryId ?: defaultMiscId) }
     var timestamp by remember { mutableStateOf(transaction?.timestamp ?: System.currentTimeMillis()) }
     var tags by remember { mutableStateOf(transaction?.tags ?: emptyList()) }
     var customTags by remember { mutableStateOf(emptyList<String>()) }
@@ -833,6 +837,15 @@ fun TransactionEditScreen(
     var saveAsRule by remember { mutableStateOf(false) }
     var showSplitDialog by remember { mutableStateOf(false) }
 
+    LaunchedEffect(categories, transaction) {
+        if (transaction == null && categoryId == null) {
+            val miscCat = categories.find { it.name.equals("Miscellaneous", ignoreCase = true) || it.name.equals("Misc", ignoreCase = true) }
+            if (miscCat != null) {
+                categoryId = miscCat.id
+            }
+        }
+    }
+
     val commonTags = listOf("split", "vacation", "work", "personal", "reimbursable", "food", "gift")
 
     var expandedAccount by remember { mutableStateOf(false) }
@@ -840,14 +853,15 @@ fun TransactionEditScreen(
     var expandedType by remember { mutableStateOf(false) }
     
     var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = timestamp)
     
-    val sdf = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+    val dateSdf = remember { SimpleDateFormat("dd MMM yyyy", Locale.getDefault()) }
+    val timeSdf = remember { SimpleDateFormat("hh:mm a", Locale.getDefault()) }
     
     val isAmountValid = amount.toDoubleOrNull()?.let { it > 0 } ?: false
-    val isMerchantValid = merchant.isNotBlank()
-    val isSaveEnabled = isAmountValid && isMerchantValid && accountId != 0L && (type != "Transfer" || toAccountId != 0L)
+    val isSaveEnabled = isAmountValid && accountId != 0L && (type != "Transfer" || toAccountId != 0L)
 
     Scaffold(
         topBar = {
@@ -923,7 +937,7 @@ fun TransactionEditScreen(
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                         ) {
                             Text(
-                                text = "+₹$inc",
+                                text = "+${inc.formatIndian(includeSymbol = true)}",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary,
@@ -972,38 +986,61 @@ fun TransactionEditScreen(
             OutlinedTextField(
                 value = merchant,
                 onValueChange = { merchant = it },
-                label = { Text("Merchant / Description") },
+                label = { Text("Merchant / Description (Optional)") },
+                placeholder = { Text("e.g. Groceries, Coffee, Shopping") },
                 modifier = Modifier.fillMaxWidth(),
                 leadingIcon = { Icon(Icons.Default.Description, contentDescription = null) },
                 singleLine = true,
                 shape = RoundedCornerShape(14.dp)
             )
 
-            // Date Selection
-            OutlinedTextField(
-                value = sdf.format(Date(timestamp)),
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Date") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { showDatePicker = true },
-                enabled = false,
-                shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                    disabledBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                    disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null) },
-                trailingIcon = {
-                    IconButton(onClick = { showDatePicker = true }) {
-                        Icon(Icons.Default.Edit, contentDescription = "Change Date")
-                    }
-                }
-            )
+            // Date & Time Selection
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Date Field
+                OutlinedTextField(
+                    value = dateSdf.format(Date(timestamp)),
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Date") },
+                    modifier = Modifier
+                        .weight(1.1f)
+                        .clickable { showDatePicker = true },
+                    enabled = false,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                        disabledBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                )
+
+                // Time Field
+                OutlinedTextField(
+                    value = timeSdf.format(Date(timestamp)),
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Time") },
+                    modifier = Modifier
+                        .weight(0.9f)
+                        .clickable { showTimePicker = true },
+                    enabled = false,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                        disabledBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    leadingIcon = { Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                )
+            }
 
             // Account Dropdown
             val selectedAccount = accounts.find { it.id == accountId }
@@ -1272,12 +1309,22 @@ fun TransactionEditScreen(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
                 TextButton(onClick = {
-                    datePickerState.selectedDateMillis?.let {
-                        timestamp = it
+                    datePickerState.selectedDateMillis?.let { utcDateMillis ->
+                        val oldCal = Calendar.getInstance().apply { timeInMillis = timestamp }
+                        val newCal = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = utcDateMillis }
+                        val targetCal = Calendar.getInstance().apply {
+                            set(Calendar.YEAR, newCal.get(Calendar.YEAR))
+                            set(Calendar.MONTH, newCal.get(Calendar.MONTH))
+                            set(Calendar.DAY_OF_MONTH, newCal.get(Calendar.DAY_OF_MONTH))
+                            set(Calendar.HOUR_OF_DAY, oldCal.get(Calendar.HOUR_OF_DAY))
+                            set(Calendar.MINUTE, oldCal.get(Calendar.MINUTE))
+                            set(Calendar.SECOND, oldCal.get(Calendar.SECOND))
+                        }
+                        timestamp = targetCal.timeInMillis
                     }
                     showDatePicker = false
                 }) {
-                    Text("OK")
+                    Text("OK", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -1288,6 +1335,44 @@ fun TransactionEditScreen(
         ) {
             DatePicker(state = datePickerState)
         }
+    }
+
+    if (showTimePicker) {
+        val initialCal = remember(timestamp) {
+            Calendar.getInstance().apply { timeInMillis = timestamp }
+        }
+        val timePickerState = rememberTimePickerState(
+            initialHour = initialCal.get(Calendar.HOUR_OF_DAY),
+            initialMinute = initialCal.get(Calendar.MINUTE),
+            is24Hour = false
+        )
+        AlertDialog(
+            onDismissRequest = { showTimePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    val cal = Calendar.getInstance().apply {
+                        timeInMillis = timestamp
+                        set(Calendar.HOUR_OF_DAY, timePickerState.hour)
+                        set(Calendar.MINUTE, timePickerState.minute)
+                        set(Calendar.SECOND, 0)
+                    }
+                    timestamp = cal.timeInMillis
+                    showTimePicker = false
+                }) {
+                    Text("OK", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimePicker = false }) {
+                    Text("Cancel")
+                }
+            },
+            text = {
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    TimePicker(state = timePickerState)
+                }
+            }
+        )
     }
 
     if (showDeleteDialog && transaction != null) {
@@ -1426,7 +1511,7 @@ fun TransactionReviewScreen(
             )
             
             Text(
-                text = "₹${transaction.amount.stripTrailingZeros().toPlainString()}",
+                text = transaction.amount.formatIndian(includeSymbol = true, includeDecimals = false),
                 style = MaterialTheme.typography.displaySmall.copy(fontFamily = MonospaceFont),
                 color = if (transaction.type == "Income") IncomeGreen else ExpenseRed
             )
@@ -1436,6 +1521,26 @@ fun TransactionReviewScreen(
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.secondary
             )
+            
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                    Text(
+                        text = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).format(Date(transaction.timestamp)),
+                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = MonospaceFont),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
             
             if (!transaction.rawMessage.isNullOrBlank()) {
                 Card(

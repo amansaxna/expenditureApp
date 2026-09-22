@@ -26,6 +26,7 @@ object DataSeeder {
                 categoryDao.insertCategory(Category(name = "Shopping", icon = "🛒"))
                 categoryDao.insertCategory(Category(name = "Finance", icon = "💰"))
                 categoryDao.insertCategory(Category(name = "Education", icon = "📚"))
+                categoryDao.insertCategory(Category(name = "Miscellaneous", icon = "📦"))
 
                 // Fetch categories to get IDs for subcategories
                 val categories = categoryDao.getAllCategoriesList()
@@ -54,6 +55,11 @@ object DataSeeder {
                     categoryDao.insertCategory(Category(name = "Dividends", parentId = it, icon = "📈"))
                 }
                 personalId?.let { categoryDao.insertCategory(Category(name = "Gym", parentId = it, icon = "🏋️‍♂️")) }
+            } else {
+                val hasMisc = existingCategories.any { it.name.equals("Miscellaneous", ignoreCase = true) || it.name.equals("Misc", ignoreCase = true) }
+                if (!hasMisc) {
+                    categoryDao.insertCategory(Category(name = "Miscellaneous", icon = "📦"))
+                }
             }
         }
     }

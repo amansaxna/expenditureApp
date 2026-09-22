@@ -3,26 +3,38 @@ package com.example.myexpenditureapp.ui.screen
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import java.util.Calendar
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -46,6 +58,9 @@ import com.example.myexpenditureapp.ui.theme.*
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import com.example.myexpenditureapp.utils.formatIndian
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,11 +107,12 @@ fun AccountListScreen(
         }
     }
 
-    val smartInsights = remember(txUiState.transactions, categories, budgetsWithProgress) {
+    val smartInsights = remember(txUiState.transactions, categories, budgetsWithProgress, accounts) {
         com.example.myexpenditureapp.domain.insights.InsightsEngine.generateInsights(
             transactions = txUiState.transactions,
             categories = categories,
-            budgets = budgetsWithProgress.map { it.budget }
+            budgets = budgetsWithProgress.map { it.budget },
+            accounts = accounts
         )
     }
 
@@ -143,19 +159,6 @@ fun AccountListScreen(
                     titleContentColor = MaterialTheme.colorScheme.onBackground
                 )
             ) 
-        },
-        floatingActionButton = {
-            SmallFloatingActionButton(
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onAddAccount()
-                },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Account")
-            }
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
@@ -307,7 +310,7 @@ fun AccountListScreen(
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        "$pct% (₹${g.currentAmount.toPlainString()} / ₹${g.targetAmount.toPlainString()})",
+                                        "$pct% (${g.currentAmount.formatIndian(includeSymbol = true)} / ${g.targetAmount.formatIndian(includeSymbol = true)})",
                                         style = MaterialTheme.typography.labelSmall,
                                         fontFamily = MonospaceFont,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -337,13 +340,39 @@ fun AccountListScreen(
             }
 
             item {
-                Text(
-                    text = "My Accounts",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.padding(vertical = 4.dp)
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "My Accounts",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    TextButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onAddAccount()
+                        },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Add",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
             }
 
             if (accounts.isEmpty()) {
@@ -364,6 +393,12 @@ fun AccountListScreen(
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        FilledTonalButton(onClick = onAddAccount) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Add Account")
+                        }
                     }
                 }
             } else {
@@ -408,7 +443,7 @@ fun DashboardPacedHeroCard(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             // Net Balance Header
@@ -445,7 +480,7 @@ fun DashboardPacedHeroCard(
 
             // Main Figure (Monospaced Tabular)
             Text(
-                text = "₹${totalNetBalance.setScale(0, RoundingMode.HALF_UP)}",
+                text = totalNetBalance.formatIndian(includeSymbol = true, includeDecimals = false),
                 style = MaterialTheme.typography.headlineLarge.copy(
                     fontFamily = MonospaceFont,
                     fontWeight = FontWeight.ExtraBold,
@@ -470,7 +505,7 @@ fun DashboardPacedHeroCard(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        "₹${monthlySpent.setScale(0, RoundingMode.HALF_UP)}",
+                        monthlySpent.formatIndian(includeSymbol = true, includeDecimals = false),
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontFamily = MonospaceFont,
                             fontWeight = FontWeight.Bold
@@ -485,7 +520,7 @@ fun DashboardPacedHeroCard(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        "₹${todayBurn.setScale(0, RoundingMode.HALF_UP)}",
+                        todayBurn.formatIndian(includeSymbol = true, includeDecimals = false),
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontFamily = MonospaceFont,
                             fontWeight = FontWeight.Bold,
@@ -663,8 +698,8 @@ fun CircularBudgetsRow(budgets: List<BudgetWithProgress>) {
                 )
                 val left = budgetProgress.budget.limitAmount.subtract(budgetProgress.currentSpending)
                 Text(
-                    text = if (left >= BigDecimal.ZERO) "₹${left.setScale(0, RoundingMode.HALF_UP)} left" 
-                           else "₹${left.negate().setScale(0, RoundingMode.HALF_UP)} over",
+                    text = if (left >= BigDecimal.ZERO) "${left.formatIndian(includeSymbol = true)} left" 
+                           else "${left.negate().formatIndian(includeSymbol = true)} over",
                     style = MaterialTheme.typography.labelSmall.copy(fontFamily = MonospaceFont, fontSize = 10.sp),
                     color = if (left >= BigDecimal.ZERO) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(top = 2.dp)
@@ -676,11 +711,30 @@ fun CircularBudgetsRow(budgets: List<BudgetWithProgress>) {
 
 @Composable
 fun AccountItem(account: Account, onEdit: () -> Unit, onDelete: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.98f else 1.0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "accountPressScale"
+    )
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .clip(RoundedCornerShape(20.dp))
-            .clickable { onEdit() },
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(),
+                onClick = onEdit
+            ),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -736,7 +790,7 @@ fun AccountItem(account: Account, onEdit: () -> Unit, onDelete: () -> Unit) {
                 }
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "₹${account.balance.stripTrailingZeros().toPlainString()}",
+                    text = account.balance.formatIndian(includeSymbol = true, includeDecimals = false),
                     style = MaterialTheme.typography.bodyMedium.copy(fontFamily = MonospaceFont, fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -841,6 +895,7 @@ fun AccountEditScreen(
                 label = { Text("Current Balance") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 prefix = { Text("₹") }
             )
 

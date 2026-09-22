@@ -139,4 +139,24 @@ class SubscriptionRadarEngineTest {
         // 3000 / 3 = 1000, 1499 / 12 = 124.92 -> Total = 1124.92
         assertEquals(BigDecimal("1124.92"), summary.totalMonthlyCommitment)
     }
+
+    @Test
+    fun testCalculateBillItem_dueTodayTriggersDueTodayStatus() {
+        val cal = Calendar.getInstance()
+        cal.set(Calendar.DAY_OF_MONTH, 15)
+        val now = cal.timeInMillis
+
+        val subDueToday = Subscription(
+            id = 5,
+            name = "Netflix Standard",
+            amount = BigDecimal("499.00"),
+            billingCycle = "Monthly",
+            dueDayOfMonth = 15,
+            isActive = true
+        )
+
+        val item = SubscriptionRadarEngine.calculateBillItem(subDueToday, now)
+        assertEquals(RadarStatus.DUE_TODAY, item.status)
+        assertEquals(0, item.daysRemaining)
+    }
 }

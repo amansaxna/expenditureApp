@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -31,6 +32,7 @@ import com.example.myexpenditureapp.ui.theme.*
 import com.example.myexpenditureapp.ui.viewmodel.AnalyticsViewModel
 import com.example.myexpenditureapp.ui.viewmodel.DrillLevel
 import com.example.myexpenditureapp.ui.viewmodel.DrillNode
+import com.example.myexpenditureapp.utils.formatIndian
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.SimpleDateFormat
@@ -200,7 +202,7 @@ fun AnalyticsScreen(viewModel: AnalyticsViewModel) {
                             },
                             leadingIcon = {
                                 Icon(
-                                    if (isParentRollupEnabled) Icons.Default.AccountTree else Icons.Default.ViewList,
+                                    if (isParentRollupEnabled) Icons.Default.AccountTree else Icons.AutoMirrored.Filled.List,
                                     contentDescription = null,
                                     modifier = Modifier.size(14.dp)
                                 )
@@ -239,7 +241,7 @@ fun AnalyticsScreen(viewModel: AnalyticsViewModel) {
                                         ) {
                                             Text(merchant, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                                             Text(
-                                                "₹${amount.toPlainString()}",
+                                                amount.formatIndian(),
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 fontWeight = FontWeight.ExtraBold,
                                                 fontFamily = MonospaceFont,
@@ -297,7 +299,7 @@ fun AnalyticsScreen(viewModel: AnalyticsViewModel) {
                                         Text(cat.name, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            "₹${amount.setScale(0, RoundingMode.HALF_UP).toPlainString()}",
+                                            amount.formatIndian(),
                                             style = MaterialTheme.typography.labelSmall,
                                             fontFamily = MonospaceFont,
                                             color = MaterialTheme.colorScheme.primary,
@@ -346,6 +348,61 @@ fun AnalyticsScreen(viewModel: AnalyticsViewModel) {
                             data = monthlyComparison,
                             modifier = Modifier.padding(top = 16.dp)
                         )
+                    }
+                }
+
+                item {
+                    SectionHeader("FINANCIAL RUNWAY & SOLVENCY", "Liquid reserves vs baseline monthly burn")
+                    CompactChartCard {
+                        val totalLiquidNet = accounts.fold(BigDecimal.ZERO) { acc, a -> acc.add(a.balance) }
+                        val monthlySpent = performance?.totalSpent ?: BigDecimal.ZERO
+                        val runwayMonths = if (monthlySpent > BigDecimal.ZERO) {
+                            totalLiquidNet.divide(monthlySpent, 1, RoundingMode.HALF_UP).toDouble()
+                        } else 6.0
+
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text("Emergency Runway", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                    Text("Total liquid reserves: ${totalLiquidNet.formatIndian()}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (runwayMonths >= 3.0) IncomeGreen.copy(alpha = 0.15f) else ExpenseRed.copy(alpha = 0.15f),
+                                    border = BorderStroke(1.dp, if (runwayMonths >= 3.0) IncomeGreen.copy(alpha = 0.3f) else ExpenseRed.copy(alpha = 0.3f))
+                                ) {
+                                    Text(
+                                        "${runwayMonths} Months",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontFamily = MonospaceFont,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = if (runwayMonths >= 3.0) IncomeGreen else ExpenseRed,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+                            LinearProgressIndicator(
+                                progress = { (runwayMonths.toFloat() / 6f).coerceIn(0.05f, 1f) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                                color = if (runwayMonths >= 3.0) IncomeGreen else ExpenseRed,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("0m Critical", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = ExpenseRed.copy(alpha = 0.8f))
+                                Text("3m Safe", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = AmberWarning.copy(alpha = 0.8f))
+                                Text("6m+ Resilient", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = IncomeGreen.copy(alpha = 0.8f))
+                            }
+                        }
                     }
                 }
             }
@@ -442,7 +499,7 @@ fun DrillBreadcrumbHeader(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    "$transactionCount transactions • Total: ₹${totalSum.toPlainString()}",
+                    "$transactionCount transactions • Total: ${totalSum.formatIndian()}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -498,7 +555,7 @@ fun WeeklySpendingDrillList(
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "₹${amt.toPlainString()}",
+                            amt.formatIndian(),
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.ExtraBold,
                             fontFamily = MonospaceFont,
@@ -564,7 +621,7 @@ fun DrillTransactionCard(
             }
 
             Text(
-                text = "${if (transaction.type == "Expense") "-" else "+"}₹${transaction.amount.toPlainString()}",
+                text = "${if (transaction.type == "Expense") "-" else "+"}${transaction.amount.formatIndian()}",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.ExtraBold,
                 fontFamily = MonospaceFont,
@@ -748,7 +805,7 @@ fun CompactChartCard(content: @Composable () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
     ) {
         Box(modifier = Modifier.padding(16.dp)) {
@@ -932,7 +989,7 @@ fun MonthlyPerformanceCard(performance: com.example.myexpenditureapp.ui.viewmode
                     Column(modifier = Modifier.weight(1f)) {
                         Text("BUDGETED", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
                         Text(
-                            "₹${performance.totalBudgeted.setScale(0, java.math.RoundingMode.HALF_UP)}",
+                            performance.totalBudgeted.formatIndian(),
                             style = MaterialTheme.typography.titleMedium.copy(fontFamily = MonospaceFont),
                             color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Bold
@@ -941,7 +998,7 @@ fun MonthlyPerformanceCard(performance: com.example.myexpenditureapp.ui.viewmode
                     Column(modifier = Modifier.weight(1f)) {
                         Text("SPENT", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
                         Text(
-                            "₹${performance.totalSpent.setScale(0, java.math.RoundingMode.HALF_UP)}",
+                            performance.totalSpent.formatIndian(),
                             style = MaterialTheme.typography.titleMedium.copy(fontFamily = MonospaceFont),
                             color = if (performance.totalSpent > performance.totalBudgeted && performance.totalBudgeted > java.math.BigDecimal.ZERO) ExpenseRed else MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Bold
@@ -950,7 +1007,7 @@ fun MonthlyPerformanceCard(performance: com.example.myexpenditureapp.ui.viewmode
                     Column(modifier = Modifier.weight(1f)) {
                         Text("SAVINGS", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
                         Text(
-                            "₹${performance.netSavings.setScale(0, java.math.RoundingMode.HALF_UP)}",
+                            performance.netSavings.formatIndian(),
                             style = MaterialTheme.typography.titleMedium.copy(fontFamily = MonospaceFont),
                             color = if (performance.netSavings >= java.math.BigDecimal.ZERO) IncomeGreen else ExpenseRed,
                             fontWeight = FontWeight.Bold

@@ -4,14 +4,26 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.ui.unit.sp
 import androidx.compose.material3.ripple
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.filled.*
@@ -39,6 +51,7 @@ import com.example.myexpenditureapp.data.Graph
 import com.example.myexpenditureapp.data.entity.Transaction
 import com.example.myexpenditureapp.ui.navigation.Route
 import com.example.myexpenditureapp.ui.screen.*
+import com.example.myexpenditureapp.ui.component.ForexChartAnimation
 import com.example.myexpenditureapp.ui.theme.MyExpenditureAppTheme
 import com.example.myexpenditureapp.ui.viewmodel.*
 import com.example.myexpenditureapp.notifications.NotificationHelper
@@ -125,6 +138,12 @@ fun MainScreen(shortcutAction: String? = null) {
         directive = calculatePaneScaffoldDirective(currentWindowAdaptiveInfo())
     )
     val snackbarHostState = remember { SnackbarHostState() }
+    var isInitialLoading by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(850)
+        isInitialLoading = false
+    }
 
     LaunchedEffect(shortcutAction) {
         when (shortcutAction) {
@@ -146,64 +165,129 @@ fun MainScreen(shortcutAction: String? = null) {
                 backStack.clear()
                 backStack.add(Route.TransactionList)
             }
+            "subscriptions" -> {
+                if (backStack.lastOrNull() !is Route.SubscriptionList) {
+                    backStack.add(Route.SubscriptionList)
+                }
+            }
         }
     }
 
     MyExpenditureAppTheme(themeMode = themeMode) {
         val haptic = LocalHapticFeedback.current
         val currentRoute = backStack.lastOrNull()
-        val isTopLevelRoute = currentRoute is Route.AccountList ||
-                currentRoute is Route.TransactionList ||
-                currentRoute is Route.Analytics ||
-                currentRoute is Route.Settings
+        val topLevelRoutes = remember {
+            listOf(Route.AccountList, Route.TransactionList, Route.Analytics, Route.Settings)
+        }
+        val currentTopLevelIndex = topLevelRoutes.indexOfFirst {
+            when (it) {
+                is Route.AccountList -> currentRoute is Route.AccountList
+                is Route.TransactionList -> currentRoute is Route.TransactionList
+                is Route.Analytics -> currentRoute is Route.Analytics
+                is Route.Settings -> currentRoute is Route.Settings
+                else -> false
+            }
+        }
+        val isTopLevelRoute = currentTopLevelIndex >= 0
 
-        Scaffold(
-            containerColor = MaterialTheme.colorScheme.background,
-            snackbarHost = { SnackbarHost(snackbarHostState) },
-            bottomBar = {
-                if (isTopLevelRoute) {
-                    AppBottomNavBar(
-                        currentRoute = currentRoute,
-                        onItemSelected = { route ->
+        var totalDragX by remember { mutableFloatStateOf(0f) }
+
+        val swipeModifier = if (isTopLevelRoute) {
+            Modifier.pointerInput(currentTopLevelIndex) {
+                detectHorizontalDragGestures(
+                    onDragStart = { totalDragX = 0f },
+                    onDragEnd = {
+                        val threshold = 65.dp.toPx()
+                        if (totalDragX < -threshold && currentTopLevelIndex < topLevelRoutes.lastIndex) {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             backStack.clear()
-                            backStack.add(route)
+                            backStack.add(topLevelRoutes[currentTopLevelIndex + 1])
+                        } else if (totalDragX > threshold && currentTopLevelIndex > 0) {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            backStack.clear()
+                            backStack.add(topLevelRoutes[currentTopLevelIndex - 1])
                         }
-                    )
-                }
+                        totalDragX = 0f
+                    },
+                    onDragCancel = { totalDragX = 0f },
+                    onHorizontalDrag = { _, dragAmount ->
+                        totalDragX += dragAmount
+                    }
+                )
             }
-        ) { innerPadding ->
-            NavDisplay(
-                backStack = backStack,
-                onBack = { backStack.removeLastOrNull() },
-                sceneStrategy = listDetailStrategy,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = innerPadding.calculateBottomPadding()),
-                entryProvider = entryProvider {
-                    entry<Route.AccountList>(
-                        metadata = ListDetailSceneStrategy.listPane(
-                            detailPlaceholder = {
-                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Text("Select an account to edit")
-                                }
+        } else {
+            // Inner pages (Add/Edit Transaction, Account Edit, etc.): Swipe right to go back
+            Modifier.pointerInput(currentRoute) {
+                detectHorizontalDragGestures(
+                    onDragStart = { totalDragX = 0f },
+                    onDragEnd = {
+                        val threshold = 55.dp.toPx()
+                        if (totalDragX > threshold) {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            backStack.removeLastOrNull()
+                        }
+                        totalDragX = 0f
+                    },
+                    onDragCancel = { totalDragX = 0f },
+                    onHorizontalDrag = { _, dragAmount ->
+                        totalDragX += dragAmount
+                    }
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(swipeModifier)
+        ) {
+            Scaffold(
+                containerColor = MaterialTheme.colorScheme.background,
+                snackbarHost = { SnackbarHost(snackbarHostState) },
+                bottomBar = {
+                    if (isTopLevelRoute) {
+                        AppBottomNavBar(
+                            currentRoute = currentRoute,
+                            onItemSelected = { route ->
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                backStack.clear()
+                                backStack.add(route)
                             }
                         )
-                    ) {
-                        val accountViewModel: AccountViewModel = viewModel()
-                        val transactionViewModel: TransactionViewModel = viewModel()
-                        val budgetViewModel: BudgetViewModel = viewModel()
-                        AccountListScreen(
-                            accountViewModel = accountViewModel,
-                            transactionViewModel = transactionViewModel,
-                            budgetViewModel = budgetViewModel,
-                            onAddAccount = { backStack.add(Route.AccountEdit()) },
-                            onEditAccount = { backStack.add(Route.AccountEdit(it.id)) },
-                            onReviewTransaction = { backStack.add(Route.TransactionReview(it.id)) },
-                            onOpenSmartInbox = { backStack.add(Route.SmartInbox) },
-                            onOpenGoals = { backStack.add(Route.GoalList) }
-                        )
                     }
+                }
+            ) { innerPadding ->
+                NavDisplay(
+                    backStack = backStack,
+                    onBack = { backStack.removeLastOrNull() },
+                    sceneStrategy = listDetailStrategy,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(bottom = innerPadding.calculateBottomPadding()),
+                    entryProvider = entryProvider {
+                        entry<Route.AccountList>(
+                            metadata = ListDetailSceneStrategy.listPane(
+                                detailPlaceholder = {
+                                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                        Text("Select an account to edit")
+                                    }
+                                }
+                            )
+                        ) {
+                            val accountViewModel: AccountViewModel = viewModel()
+                            val transactionViewModel: TransactionViewModel = viewModel()
+                            val budgetViewModel: BudgetViewModel = viewModel()
+                            AccountListScreen(
+                                accountViewModel = accountViewModel,
+                                transactionViewModel = transactionViewModel,
+                                budgetViewModel = budgetViewModel,
+                                onAddAccount = { backStack.add(Route.AccountEdit()) },
+                                onEditAccount = { backStack.add(Route.AccountEdit(it.id)) },
+                                onReviewTransaction = { backStack.add(Route.TransactionReview(it.id)) },
+                                onOpenSmartInbox = { backStack.add(Route.SmartInbox) },
+                                onOpenGoals = { backStack.add(Route.GoalList) }
+                            )
+                        }
                     entry<Route.AccountEdit>(
                         metadata = ListDetailSceneStrategy.detailPane()
                     ) { route ->
@@ -459,6 +543,41 @@ fun MainScreen(shortcutAction: String? = null) {
                     }
                 }
             )
+            }
+
+            AnimatedVisibility(
+                visible = isInitialLoading,
+                enter = fadeIn(),
+                exit = fadeOut(animationSpec = tween(400))
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        ForexChartAnimation(
+                            size = 180.dp
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "SpendZen",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Loading financial vaults...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -476,9 +595,39 @@ fun AppBottomNavBar(
             NavigationItem("Settings", Icons.Default.Settings, Icons.Outlined.Settings, Route.Settings)
         )
     }
+    val haptic = LocalHapticFeedback.current
+    val currentIndex = items.indexOfFirst { item ->
+        when (item.route) {
+            is Route.AccountList -> currentRoute is Route.AccountList
+            is Route.TransactionList -> currentRoute is Route.TransactionList
+            is Route.Analytics -> currentRoute is Route.Analytics
+            is Route.Settings -> currentRoute is Route.Settings
+            else -> false
+        }
+    }
+    var navDragX by remember { mutableFloatStateOf(0f) }
 
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(currentIndex) {
+                detectHorizontalDragGestures(
+                    onDragStart = { navDragX = 0f },
+                    onDragEnd = {
+                        val threshold = 50.dp.toPx()
+                        if (navDragX < -threshold && currentIndex >= 0 && currentIndex < items.lastIndex) {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onItemSelected(items[currentIndex + 1].route)
+                        } else if (navDragX > threshold && currentIndex > 0) {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onItemSelected(items[currentIndex - 1].route)
+                        }
+                        navDragX = 0f
+                    },
+                    onDragCancel = { navDragX = 0f },
+                    onHorizontalDrag = { _, dragAmount -> navDragX += dragAmount }
+                )
+            },
         color = MaterialTheme.colorScheme.background,
         tonalElevation = 0.dp,
         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
@@ -508,6 +657,18 @@ fun AppBottomNavBar(
                     targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
                     label = "navTextColor"
                 )
+                val scale by animateFloatAsState(
+                    targetValue = if (isSelected) 1.15f else 1.0f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    ),
+                    label = "navScale"
+                )
+                val pillColor by animateColorAsState(
+                    targetValue = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent,
+                    label = "pillColor"
+                )
 
                 Column(
                     modifier = Modifier
@@ -522,13 +683,29 @@ fun AppBottomNavBar(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Icon(
-                        imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
-                        contentDescription = item.label,
-                        tint = iconColor,
-                        modifier = Modifier.size(22.dp)
-                    )
-                    Spacer(modifier = Modifier.height(3.dp))
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = pillColor,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 12.dp, vertical = 3.dp)
+                                .graphicsLayer {
+                                    scaleX = scale
+                                    scaleY = scale
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
+                                contentDescription = item.label,
+                                tint = iconColor,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = item.label,
                         style = MaterialTheme.typography.labelSmall.copy(

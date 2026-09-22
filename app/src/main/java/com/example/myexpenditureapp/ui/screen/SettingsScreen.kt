@@ -45,6 +45,7 @@ import com.example.myexpenditureapp.data.Graph
 import com.example.myexpenditureapp.data.backup.BackupManager
 import com.example.myexpenditureapp.ui.theme.*
 import com.example.myexpenditureapp.ui.viewmodel.ThemeViewModel
+import com.example.myexpenditureapp.ui.component.ForexChartAnimation
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -63,6 +64,7 @@ fun SettingsScreen(
 
     val aboutIconRotation = remember { Animatable(0f) }
     val aboutIconScale = remember { Animatable(1f) }
+    var showAboutDialog by remember { mutableStateOf(false) }
 
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     var isNotificationAccessGranted by remember {
@@ -370,6 +372,7 @@ fun SettingsScreen(
 
                 val triggerAboutAnimation: () -> Unit = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    showAboutDialog = true
                     scope.launch {
                         launch {
                             aboutIconScale.snapTo(0.82f)
@@ -458,6 +461,69 @@ fun SettingsScreen(
                     }
                 }
             }
+        }
+
+        if (showAboutDialog) {
+            AlertDialog(
+                onDismissRequest = { showAboutDialog = false },
+                title = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(36.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF0B1019)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(34.dp)
+                                )
+                            }
+                        }
+                        Text("About SpendZen", fontWeight = FontWeight.Bold)
+                    }
+                },
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        ForexChartAnimation(
+                            size = 170.dp,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "SpendZen v2.0",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "100% On-Device Financial Intelligence\nEncrypted Local Vaults • Zero Cloud Tracking",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        shape = RoundedCornerShape(12.dp),
+                        onClick = { showAboutDialog = false }
+                    ) {
+                        Text("Done", fontWeight = FontWeight.Bold)
+                    }
+                },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            )
         }
 
         showRestoreConfirmDialog?.let { uri ->

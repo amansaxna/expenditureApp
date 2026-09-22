@@ -15,6 +15,8 @@ import androidx.core.content.ContextCompat
 import androidx.work.*
 import com.example.myexpenditureapp.MainActivity
 import com.example.myexpenditureapp.R
+import com.example.myexpenditureapp.utils.formatIndian
+import java.math.BigDecimal
 import java.util.*
 import java.util.concurrent.TimeUnit
 
@@ -23,6 +25,7 @@ object NotificationHelper {
     const val CHANNEL_BUDGET = "channel_budget"
     const val CHANNEL_DAILY = "channel_daily"
     const val CHANNEL_MONTHLY = "channel_monthly"
+    const val CHANNEL_SUBSCRIPTION = "channel_subscription"
 
     fun createNotificationChannels(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -42,6 +45,14 @@ object NotificationHelper {
                 description = "Alerts when you approach or exceed your budget limits"
             }
 
+            val subscriptionChannel = NotificationChannel(
+                CHANNEL_SUBSCRIPTION,
+                "Subscription & Bill Reminders",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Reminders for upcoming and due recurring subscription payments"
+            }
+
             val dailyChannel = NotificationChannel(
                 CHANNEL_DAILY,
                 "Daily Reflection",
@@ -59,13 +70,15 @@ object NotificationHelper {
             }
 
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannels(listOf(reviewChannel, budgetChannel, dailyChannel, monthlyChannel))
+            manager.createNotificationChannels(listOf(reviewChannel, budgetChannel, subscriptionChannel, dailyChannel, monthlyChannel))
         }
     }
 
     @SuppressLint("MissingPermission")
     fun showReviewNotification(context: Context, merchant: String, amount: String) {
         if (!hasPostNotificationPermission(context)) return
+
+        val formattedAmt = amount.toBigDecimalOrNull()?.formatIndian() ?: "₹$amount"
 
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -77,13 +90,13 @@ object NotificationHelper {
 
         val bigTextStyle = NotificationCompat.BigTextStyle()
             .setBigContentTitle("New Transaction: $merchant")
-            .bigText("₹$amount was captured from SMS/UPI.\nTap to review and assign category or save as rule.")
+            .bigText("$formattedAmt was captured from SMS/UPI.\nTap to review and assign category or save as rule.")
             .setSummaryText("Smart Inbox")
 
         val builder = NotificationCompat.Builder(context, CHANNEL_REVIEW)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle("Review Required: $merchant")
-            .setContentText("₹$amount • Tap to review category")
+            .setContentText("$formattedAmt • Tap to review category")
             .setStyle(bigTextStyle)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingIntent)
@@ -134,6 +147,9 @@ object NotificationHelper {
     fun showDailyReflection(context: Context, todaySpend: String, monthlyNetFlow: String) {
         if (!hasPostNotificationPermission(context)) return
 
+        val formattedToday = todaySpend.toBigDecimalOrNull()?.formatIndian() ?: "₹$todaySpend"
+        val formattedNet = monthlyNetFlow.toBigDecimalOrNull()?.formatIndian() ?: "₹$monthlyNetFlow"
+
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
@@ -144,13 +160,13 @@ object NotificationHelper {
 
         val bigTextStyle = NotificationCompat.BigTextStyle()
             .setBigContentTitle("🌙 Daily Spending Reflection")
-            .bigText("Today's Total Outflow: ₹$todaySpend\nMonth-to-Date Net Flow: ₹$monthlyNetFlow\nKeep track of your financial habits!")
+            .bigText("Today's Total Outflow: $formattedToday\nMonth-to-Date Net Flow: $formattedNet\nKeep track of your financial habits!")
             .setSummaryText("Daily Summary")
 
         val builder = NotificationCompat.Builder(context, CHANNEL_DAILY)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle("Daily Reflection")
-            .setContentText("Today: ₹$todaySpend | Net Month: ₹$monthlyNetFlow")
+            .setContentText("Today: $formattedToday | Net Month: $formattedNet")
             .setStyle(bigTextStyle)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
@@ -167,6 +183,8 @@ object NotificationHelper {
     fun showMonthlySummary(context: Context, netFlow: String) {
         if (!hasPostNotificationPermission(context)) return
 
+        val formattedNet = netFlow.toBigDecimalOrNull()?.formatIndian() ?: "₹$netFlow"
+
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
@@ -177,13 +195,13 @@ object NotificationHelper {
 
         val bigTextStyle = NotificationCompat.BigTextStyle()
             .setBigContentTitle("🎉 Monthly Financial Victory!")
-            .bigText("You closed the month with a net savings flow of ₹$netFlow.\nGreat discipline! Keep building your wealth.")
+            .bigText("You closed the month with a net savings flow of $formattedNet.\nGreat discipline! Keep building your wealth.")
             .setSummaryText("Monthly Report")
 
         val builder = NotificationCompat.Builder(context, CHANNEL_MONTHLY)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("Monthly Victory: ₹$netFlow")
-            .setContentText("Great month! Your net flow was ₹$netFlow.")
+            .setContentTitle("Monthly Victory: $formattedNet")
+            .setContentText("Great month! Your net flow was $formattedNet.")
             .setStyle(bigTextStyle)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
@@ -192,6 +210,68 @@ object NotificationHelper {
 
         try {
             NotificationManagerCompat.from(context).notify(400, builder.build())
+        } catch (e: SecurityException) {
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun showSubscriptionDueNotification(
+        context: Context,
+        subscriptionId: Long,
+        subscriptionName: String,
+        amount: String,
+        status: com.example.myexpenditureapp.domain.radar.RadarStatus,
+        daysDiff: Int
+    ) {
+        if (!hasPostNotificationPermission(context)) return
+
+        val formattedAmt = amount.toBigDecimalOrNull()?.formatIndian() ?: "₹$amount"
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("shortcut_action", "subscriptions")
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context, (1000 + subscriptionId).toInt(), intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val (title, text, accentColor) = when (status) {
+            com.example.myexpenditureapp.domain.radar.RadarStatus.DUE_TODAY -> Triple(
+                "📅 Subscription Due Today: $subscriptionName",
+                "Your payment of $formattedAmt is due today. Ensure sufficient balance in your account.",
+                0xFFF59E0B.toInt() // Amber Warning
+            )
+            com.example.myexpenditureapp.domain.radar.RadarStatus.OVERDUE -> Triple(
+                "⚠️ Overdue Payment: $subscriptionName",
+                "Payment of $formattedAmt was due ${Math.abs(daysDiff)} days ago. Tap to mark as paid or review.",
+                0xFFF43F5E.toInt() // Expense Red
+            )
+            else -> Triple(
+                "🔔 Upcoming Bill: $subscriptionName",
+                "$formattedAmt is due in $daysDiff days. Tap to manage in Subscription Radar.",
+                0xFF6366F1.toInt() // Indigo Primary
+            )
+        }
+
+        val bigTextStyle = NotificationCompat.BigTextStyle()
+            .setBigContentTitle(title)
+            .bigText("$text\n\nTrack all recurring commitments in Subscription Radar.")
+            .setSummaryText("Subscription Radar")
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_SUBSCRIPTION)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(bigTextStyle)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .addAction(R.drawable.ic_launcher_foreground, "View Radar", pendingIntent)
+            .setAutoCancel(true)
+            .setColor(accentColor)
+
+        try {
+            NotificationManagerCompat.from(context).notify((5000 + subscriptionId).toInt(), builder.build())
         } catch (e: SecurityException) {
         }
     }
@@ -240,12 +320,28 @@ object NotificationHelper {
             ExistingPeriodicWorkPolicy.KEEP,
             budgetRequest
         )
+
+        // Subscription Reminder Worker - Periodic every 12 hours
+        val subscriptionRequest = PeriodicWorkRequestBuilder<SubscriptionWorker>(12, TimeUnit.HOURS)
+            .build()
+
+        workManager.enqueueUniquePeriodicWork(
+            "SubscriptionReminderCheck",
+            ExistingPeriodicWorkPolicy.KEEP,
+            subscriptionRequest
+        )
     }
 
     fun triggerBudgetCheck(context: Context) {
         val workManager = WorkManager.getInstance(context)
         val budgetRequest = OneTimeWorkRequestBuilder<BudgetWorker>().build()
         workManager.enqueue(budgetRequest)
+    }
+
+    fun triggerSubscriptionCheck(context: Context) {
+        val workManager = WorkManager.getInstance(context)
+        val subscriptionRequest = OneTimeWorkRequestBuilder<SubscriptionWorker>().build()
+        workManager.enqueue(subscriptionRequest)
     }
 
     fun isNotificationListenerAccessGranted(context: Context): Boolean {

@@ -29,6 +29,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myexpenditureapp.data.entity.Transaction
 import com.example.myexpenditureapp.ui.theme.*
 import com.example.myexpenditureapp.ui.viewmodel.TransactionViewModel
+import com.example.myexpenditureapp.utils.formatIndian
 import java.math.BigDecimal
 import java.text.SimpleDateFormat
 import java.util.*
@@ -183,7 +184,7 @@ fun SmartInboxScreen(
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "₹${totalPendingAmount.stripTrailingZeros().toPlainString()}",
+                                        text = totalPendingAmount.formatIndian(),
                                         style = MaterialTheme.typography.headlineMedium.copy(fontFamily = MonospaceFont),
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface
@@ -485,11 +486,23 @@ fun SwipeablePendingTransactionItem(
                         maxLines = 1
                     )
                     Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        "₹${transaction.amount.stripTrailingZeros().toPlainString()} • Tap to assign category",
-                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = MonospaceFont),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault()).format(Date(transaction.timestamp)),
+                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = MonospaceFont),
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text("•", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outlineVariant)
+                        Text(
+                            "${transaction.amount.formatIndian()} • Tap to assign category",
+                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = MonospaceFont),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     if (!transaction.rawMessage.isNullOrBlank()) {
                         Spacer(modifier = Modifier.height(3.dp))
                         Text(

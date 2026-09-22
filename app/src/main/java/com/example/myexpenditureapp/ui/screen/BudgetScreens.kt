@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -17,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -25,6 +27,7 @@ import com.example.myexpenditureapp.data.entity.Category
 import com.example.myexpenditureapp.domain.model.BudgetWithProgress
 import com.example.myexpenditureapp.ui.theme.*
 import com.example.myexpenditureapp.ui.viewmodel.BudgetViewModel
+import com.example.myexpenditureapp.utils.formatIndian
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.util.Calendar
@@ -293,8 +296,8 @@ fun BudgetCard(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = if (remaining >= BigDecimal.ZERO) "₹${remaining.setScale(0, RoundingMode.HALF_UP)} left" 
-                                   else "₹${remaining.negate().setScale(0, RoundingMode.HALF_UP)} exceeded",
+                            text = if (remaining >= BigDecimal.ZERO) "${remaining.formatIndian()} left" 
+                                   else "${remaining.negate().formatIndian()} exceeded",
                             style = MaterialTheme.typography.labelSmall.copy(fontFamily = MonospaceFont),
                             color = if (remaining >= BigDecimal.ZERO) MaterialTheme.colorScheme.onSurfaceVariant else ExpenseRed
                         )
@@ -318,8 +321,14 @@ fun BudgetCard(
             
             Spacer(modifier = Modifier.height(16.dp))
             
+            val animatedProgress by androidx.compose.animation.core.animateFloatAsState(
+                targetValue = budgetProgress.progress.coerceIn(0f, 1f),
+                animationSpec = androidx.compose.animation.core.tween(durationMillis = 800, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                label = "budgetProgress"
+            )
+
             LinearProgressIndicator(
-                progress = { budgetProgress.progress.coerceIn(0f, 1f) },
+                progress = { animatedProgress },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(8.dp)
@@ -336,13 +345,13 @@ fun BudgetCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Spent: ₹${budgetProgress.currentSpending.setScale(0, RoundingMode.HALF_UP)}",
+                    text = "Spent: ${budgetProgress.currentSpending.formatIndian()}",
                     style = MaterialTheme.typography.labelSmall.copy(fontFamily = MonospaceFont),
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "Limit: ₹${budgetProgress.budget.limitAmount.setScale(0, RoundingMode.HALF_UP)}",
+                    text = "Limit: ${budgetProgress.budget.limitAmount.formatIndian()}",
                     style = MaterialTheme.typography.labelSmall.copy(fontFamily = MonospaceFont),
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -435,6 +444,7 @@ fun BudgetEditScreen(
                 label = { Text("MONTHLY LIMIT") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 prefix = { Text("₹") }
             )
 

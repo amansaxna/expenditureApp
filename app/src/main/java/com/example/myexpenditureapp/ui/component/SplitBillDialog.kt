@@ -20,6 +20,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myexpenditureapp.ui.theme.MonospaceFont
+import com.example.myexpenditureapp.utils.formatIndian
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -157,7 +158,7 @@ fun SplitBillDialog(
                         ) {
                             Text("Each Person Pays:", style = MaterialTheme.typography.bodyMedium)
                             Text(
-                                "₹${perPersonShare.toPlainString()}",
+                                perPersonShare.formatIndian(),
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.ExtraBold,
                                 fontFamily = MonospaceFont,
@@ -171,7 +172,7 @@ fun SplitBillDialog(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text("Includes $tipPercent% tip:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("₹${tipAmount.toPlainString()} (Total: ₹${finalTotal.toPlainString()})", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("${tipAmount.formatIndian()} (Total: ${finalTotal.formatIndian()})", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
@@ -180,7 +181,7 @@ fun SplitBillDialog(
                 // Copy Share button
                 OutlinedButton(
                     onClick = {
-                        val summary = "Bill for $merchant: Total ₹${finalTotal.toPlainString()} split among $numPeople people = ₹${perPersonShare.toPlainString()} each."
+                        val summary = "Bill for $merchant: Total ${finalTotal.formatIndian()} split among $numPeople people = ${perPersonShare.formatIndian()} each."
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         clipboard.setPrimaryClip(ClipData.newPlainText("Split Bill", summary))
                         Toast.makeText(context, "Breakdown copied to clipboard!", Toast.LENGTH_SHORT).show()
@@ -199,7 +200,7 @@ fun SplitBillDialog(
                     onApplySplit(perPersonShare, numPeople, "split")
                 }
             ) {
-                Text("Set My Share (₹${perPersonShare.toPlainString()})")
+                Text("Set My Share (${perPersonShare.formatIndian()})")
             }
         },
         dismissButton = {

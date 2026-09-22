@@ -145,10 +145,6 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
             viewModelScope.launch { _eventFlow.emit(UiEvent.ShowSnackbar("Amount must be greater than zero")) }
             return
         }
-        if (merchant.isBlank()) {
-            viewModelScope.launch { _eventFlow.emit(UiEvent.ShowSnackbar("Merchant/Description cannot be empty")) }
-            return
-        }
         if (accountId == 0L) {
             viewModelScope.launch { _eventFlow.emit(UiEvent.ShowSnackbar("Please select an account")) }
             return

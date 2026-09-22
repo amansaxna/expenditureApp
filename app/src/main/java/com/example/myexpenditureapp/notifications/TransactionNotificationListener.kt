@@ -74,12 +74,13 @@ class TransactionNotificationListener : NotificationListenerService() {
         val parsed = SmsParser.parse(combinedMessage)
         if (parsed != null) {
             Log.d(TAG, "Parsed notification transaction: $parsed")
-            val notificationId = "notif_${pkg}_${sbn.postTime}_${parsed.amount}"
-            processTransaction(notificationId, parsed.amount, parsed.merchant, parsed.type, combinedMessage)
+            val notifTime = if (sbn.postTime > 0) sbn.postTime else System.currentTimeMillis()
+            val notificationId = "notif_${pkg}_${notifTime}_${parsed.amount}"
+            processTransaction(notificationId, parsed.amount, parsed.merchant, parsed.type, combinedMessage, notifTime)
         }
     }
 
-    private fun processTransaction(uniqueId: String, amount: BigDecimal, merchant: String, type: String, rawMessage: String) {
+    private fun processTransaction(uniqueId: String, amount: BigDecimal, merchant: String, type: String, rawMessage: String, timestamp: Long) {
         scope.launch {
             try {
                 Graph.provide(applicationContext)
@@ -110,7 +111,7 @@ class TransactionNotificationListener : NotificationListenerService() {
                     categoryId = matchedCategoryId,
                     amount = amount,
                     merchant = merchant,
-                    timestamp = System.currentTimeMillis(),
+                    timestamp = timestamp,
                     type = type,
                     smsId = uniqueId,
                     isReviewed = false,

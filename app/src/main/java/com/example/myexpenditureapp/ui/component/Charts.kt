@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myexpenditureapp.ui.theme.*
+import com.example.myexpenditureapp.utils.formatIndian
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.util.Locale
@@ -88,7 +89,7 @@ fun PieChart(
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
                 Text(
-                    text = "₹${total.setScale(0, RoundingMode.HALF_UP)}",
+                    text = total.formatIndian(),
                     style = MaterialTheme.typography.headlineMedium.copy(fontFamily = MonospaceFont),
                     fontWeight = FontWeight.ExtraBold,
                     color = MaterialTheme.colorScheme.onSurface
