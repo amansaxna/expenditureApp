@@ -43,11 +43,14 @@ interface TransactionDao {
     @Query("UPDATE transactions SET isReviewed = 1 WHERE isReviewed = 0")
     suspend fun markAllAsReviewed()
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertTransaction(transaction: Transaction)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertAll(transactions: List<Transaction>)
+
+    @Update
+    suspend fun updateTransaction(transaction: Transaction)
 
     @Delete
     suspend fun deleteTransaction(transaction: Transaction)

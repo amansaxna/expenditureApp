@@ -21,10 +21,10 @@ interface CategoryDao {
     @Query("SELECT * FROM categories WHERE parentId = :parentId")
     fun getSubcategories(parentId: Long): Flow<List<Category>>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertCategory(category: Category)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertAll(categories: List<Category>)
 
     @Update

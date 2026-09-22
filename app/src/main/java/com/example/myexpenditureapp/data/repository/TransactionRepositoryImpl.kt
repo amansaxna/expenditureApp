@@ -50,7 +50,11 @@ class TransactionRepositoryImpl(
             // Apply new transaction balances
             adjustBalances(transaction, 1)
             
-            transactionDao.insertTransaction(transaction)
+            if (transaction.id != 0L) {
+                transactionDao.updateTransaction(transaction)
+            } else {
+                transactionDao.insertTransaction(transaction)
+            }
         }
     }
 

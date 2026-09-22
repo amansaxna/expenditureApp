@@ -18,10 +18,10 @@ interface AutoCategoryRuleDao {
     @Query("SELECT * FROM auto_category_rules WHERE keyword = :keyword LIMIT 1")
     suspend fun getRuleByKeyword(keyword: String): AutoCategoryRule?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertRule(rule: AutoCategoryRule): Long
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertAll(rules: List<AutoCategoryRule>)
 
     @Update

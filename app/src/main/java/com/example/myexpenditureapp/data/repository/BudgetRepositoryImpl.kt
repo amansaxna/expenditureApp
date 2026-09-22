@@ -63,7 +63,11 @@ class BudgetRepositoryImpl(
     }
 
     override suspend fun saveBudget(budget: Budget) {
-        budgetDao.insertBudget(budget)
+        if (budget.id != 0L) {
+            budgetDao.updateBudget(budget)
+        } else {
+            budgetDao.insertBudget(budget)
+        }
     }
 
     override suspend fun deleteBudget(budget: Budget) {

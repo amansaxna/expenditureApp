@@ -11,7 +11,12 @@ class AccountRepositoryImpl(private val accountDao: AccountDao) : AccountReposit
     override suspend fun getAccountById(id: Long): Account? = accountDao.getAccountById(id)
 
     override suspend fun saveAccount(account: Account): Long {
-        return accountDao.insertAccount(account)
+        return if (account.id > 0L) {
+            accountDao.updateAccount(account)
+            account.id
+        } else {
+            accountDao.insertAccount(account)
+        }
     }
 
     override suspend fun updateAccount(account: Account) {

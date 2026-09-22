@@ -15,10 +15,10 @@ interface AccountDao {
     @Query("SELECT * FROM accounts")
     suspend fun getAllAccountsSync(): List<Account>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertAccount(account: Account): Long
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertAll(accounts: List<Account>)
 
     @Update

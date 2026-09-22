@@ -17,7 +17,12 @@ class SavingGoalRepositoryImpl(
     override suspend fun getGoalById(id: Long): SavingGoal? = goalDao.getGoalById(id)
 
     override suspend fun saveGoal(goal: SavingGoal): Long {
-        return goalDao.insertGoal(goal)
+        return if (goal.id != 0L) {
+            goalDao.updateGoal(goal)
+            goal.id
+        } else {
+            goalDao.insertGoal(goal)
+        }
     }
 
     override suspend fun depositFunds(goalId: Long, amount: BigDecimal) {

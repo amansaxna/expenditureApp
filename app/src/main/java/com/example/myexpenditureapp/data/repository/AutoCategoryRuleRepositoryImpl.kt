@@ -48,7 +48,12 @@ class AutoCategoryRuleRepositoryImpl(
     }
 
     override suspend fun saveRule(rule: AutoCategoryRule): Long {
-        return ruleDao.insertRule(rule)
+        return if (rule.id != 0L) {
+            ruleDao.updateRule(rule)
+            rule.id
+        } else {
+            ruleDao.insertRule(rule)
+        }
     }
 
     override suspend fun deleteRule(rule: AutoCategoryRule) {

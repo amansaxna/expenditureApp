@@ -16,10 +16,10 @@ interface SavingGoalDao {
     @Query("SELECT * FROM saving_goals WHERE id = :id")
     suspend fun getGoalById(id: Long): SavingGoal?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertGoal(goal: SavingGoal): Long
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertAll(goals: List<SavingGoal>)
 
     @Update
