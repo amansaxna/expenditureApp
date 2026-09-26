@@ -623,14 +623,12 @@ fun DrillTransactionCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(42.dp)
+            // Floating Borderless Category Emoji
+            Box(
+                modifier = Modifier.size(28.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(category?.icon ?: "💳", style = MaterialTheme.typography.titleMedium)
-                }
+                Text(category?.icon ?: "💳", fontSize = 20.sp)
             }
 
             Spacer(modifier = Modifier.width(12.dp))

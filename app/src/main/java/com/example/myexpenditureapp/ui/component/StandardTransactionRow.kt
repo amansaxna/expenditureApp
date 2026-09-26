@@ -89,17 +89,14 @@ fun StandardTransactionRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Category Icon Squircle Container
+            // Floating Borderless Category Emoji
             Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                modifier = Modifier.size(28.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = category?.icon ?: if (isIncome) "💰" else "💳",
-                    fontSize = 18.sp
+                    fontSize = 20.sp
                 )
             }
 
