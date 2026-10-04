@@ -677,12 +677,14 @@ fun ToReviewSection(
         }
         
         transactions.take(3).forEach { transaction ->
-            SwipeablePendingTransactionItem(
-                transaction = transaction,
-                onMarkAsReviewed = { onMarkAsReviewed(transaction) },
-                onDeleteUnreviewed = { onDeleteUnreviewed(transaction) },
-                onReviewDetail = { onReviewDetail(transaction) }
-            )
+            key(transaction.id) {
+                SwipeablePendingTransactionItem(
+                    transaction = transaction,
+                    onMarkAsReviewed = { onMarkAsReviewed(transaction) },
+                    onDeleteUnreviewed = { onDeleteUnreviewed(transaction) },
+                    onReviewDetail = { onReviewDetail(transaction) }
+                )
+            }
         }
     }
 }

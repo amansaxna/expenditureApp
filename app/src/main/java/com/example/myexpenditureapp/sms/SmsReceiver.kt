@@ -64,10 +64,9 @@ class SmsReceiver : BroadcastReceiver() {
                 accountId = Graph.saveAccountUseCase(defaultAccount)
             }
 
-            if (accountId != null) {
-                val matchedCategoryId = Graph.autoCategoryRuleRepository.getMatchingCategoryId(smsTx.merchant)
-                val transaction = Transaction(
-                    accountId = accountId,
+            val matchedCategoryId = Graph.autoCategoryRuleRepository.getMatchingCategoryId(smsTx.merchant)
+            val transaction = Transaction(
+                accountId = accountId,
                     categoryId = matchedCategoryId,
                     amount = smsTx.amount,
                     merchant = smsTx.merchant,
@@ -78,6 +77,11 @@ class SmsReceiver : BroadcastReceiver() {
                     rawMessage = rawMessage
                 )
                 Graph.saveTransactionUseCase(transaction)
+                val savedTxId = Graph.transactionRepository.getUnreviewedTransactions().first().find { it.smsId == smsId }?.id ?: 0L
+                if (savedTxId != 0L) {
+                    com.example.myexpenditureapp.overlay.TransactionOverlayActivity.launchIfAllowed(context, savedTxId)
+                }
+
                 NotificationHelper.showReviewNotification(
                     context,
                     smsTx.merchant,
@@ -85,9 +89,6 @@ class SmsReceiver : BroadcastReceiver() {
                 )
                 NotificationHelper.triggerBudgetCheck(context)
                 Log.d("SmsReceiver", "Saved transaction to review: ${smsTx.merchant}")
-            } else {
-                Log.e("SmsReceiver", "Failed to resolve account ID even after creation.")
-            }
         }
     }
 }

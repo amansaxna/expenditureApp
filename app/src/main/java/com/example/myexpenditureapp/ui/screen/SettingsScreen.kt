@@ -73,11 +73,18 @@ fun SettingsScreen(
     var isLiveStatusNotificationEnabled by remember {
         mutableStateOf(com.example.myexpenditureapp.notifications.NotificationHelper.isLiveStatusEnabled(context))
     }
+    var isOverlayPermissionGranted by remember {
+        mutableStateOf(com.example.myexpenditureapp.overlay.OverlayHelper.canDrawOverlays(context))
+    }
+    var isInstantOverlayEnabled by remember {
+        mutableStateOf(com.example.myexpenditureapp.overlay.OverlayHelper.isInstantOverlayEnabled(context))
+    }
 
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                 isNotificationAccessGranted = com.example.myexpenditureapp.notifications.NotificationHelper.isNotificationListenerAccessGranted(context)
+                isOverlayPermissionGranted = com.example.myexpenditureapp.overlay.OverlayHelper.canDrawOverlays(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -277,6 +284,43 @@ fun SettingsScreen(
                                     com.example.myexpenditureapp.notifications.LiveStatusNotificationManager.refresh(context)
                                 } else {
                                     com.example.myexpenditureapp.notifications.NotificationHelper.cancelLiveStatusNotification(context)
+                                }
+                            }
+                        )
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                            thickness = 0.5.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
+                        )
+
+                        SettingsNavigationRow(
+                            title = "Instant Floating Pop-up",
+                            subtitle = if (!isOverlayPermissionGranted) "Permission required • Tap to enable 'Display over other apps'" else "Truecaller-style interactive pop-up when payment is detected",
+                            icon = Icons.Default.Bolt,
+                            trailingContent = {
+                                Switch(
+                                    checked = isInstantOverlayEnabled && isOverlayPermissionGranted,
+                                    onCheckedChange = { isChecked ->
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        if (!isOverlayPermissionGranted && isChecked) {
+                                            com.example.myexpenditureapp.overlay.OverlayHelper.openOverlayPermissionSettings(context)
+                                        } else {
+                                            isInstantOverlayEnabled = isChecked
+                                            com.example.myexpenditureapp.overlay.OverlayHelper.setInstantOverlayEnabled(context, isChecked)
+                                        }
+                                    }
+                                )
+                            },
+                            onClick = {
+                                if (!isOverlayPermissionGranted) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    com.example.myexpenditureapp.overlay.OverlayHelper.openOverlayPermissionSettings(context)
+                                } else {
+                                    val next = !isInstantOverlayEnabled
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    isInstantOverlayEnabled = next
+                                    com.example.myexpenditureapp.overlay.OverlayHelper.setInstantOverlayEnabled(context, next)
                                 }
                             }
                         )

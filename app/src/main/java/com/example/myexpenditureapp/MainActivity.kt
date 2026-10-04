@@ -336,8 +336,15 @@ fun MainScreen(shortcutAction: String? = null) {
                             TransactionReviewScreen(
                                 transaction = it,
                                 categories = categories,
-                                onMarkAsReviewed = { catId, saveAsRule ->
-                                    viewModel.reviewTransaction(it.id, catId, saveAsRule)
+                                onMarkAsReviewed = { merch, amt, catId, txType, saveAsRule ->
+                                    viewModel.reviewTransaction(
+                                        transactionId = it.id,
+                                        merchant = merch,
+                                        amount = amt,
+                                        categoryId = catId,
+                                        type = txType,
+                                        saveAsRule = saveAsRule
+                                    )
                                     backStack.removeLastOrNull()
                                 },
                                 onDelete = { tx ->

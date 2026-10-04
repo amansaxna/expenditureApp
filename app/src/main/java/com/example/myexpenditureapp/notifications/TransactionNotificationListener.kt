@@ -119,6 +119,11 @@ class TransactionNotificationListener : NotificationListenerService() {
                 )
 
                 Graph.saveTransactionUseCase(transaction)
+                val savedTxId = Graph.transactionRepository.getUnreviewedTransactions().first().find { it.smsId == uniqueId }?.id ?: 0L
+                if (savedTxId != 0L) {
+                    com.example.myexpenditureapp.overlay.TransactionOverlayActivity.launchIfAllowed(applicationContext, savedTxId)
+                }
+
                 NotificationHelper.showReviewNotification(
                     applicationContext,
                     merchant,

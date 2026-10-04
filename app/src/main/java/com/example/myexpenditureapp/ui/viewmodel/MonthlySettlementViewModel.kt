@@ -26,6 +26,8 @@ class MonthlySettlementViewModel : ViewModel() {
     private val _isBannerDismissed = MutableStateFlow(false)
     val isBannerDismissed = _isBannerDismissed.asStateFlow()
 
+    private val _refreshTrigger = MutableStateFlow(System.currentTimeMillis())
+
     val activeGoals: StateFlow<List<SavingGoal>> = goalRepo.getAllGoals()
         .map { goals -> goals.filter { !it.isCompleted } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -33,13 +35,14 @@ class MonthlySettlementViewModel : ViewModel() {
     val unsettledMonthSummary: StateFlow<MonthClosureSummary?> = combine(
         transactionRepo.getAllTransactions(),
         categoryRepo.getAllCategories(),
-        budgetRepo.getAllBudgets()
-    ) { txs, cats, buds ->
+        budgetRepo.getAllBudgets(),
+        _refreshTrigger
+    ) { txs, cats, buds, _ ->
         val (prevMonth, prevYear) = MonthlySettlementManager.getPreviousMonthAndYear()
         val isSettled = MonthlySettlementManager.isMonthSettled(prevMonth, prevYear)
         val isDismissed = MonthlySettlementManager.isMonthDismissed(prevMonth, prevYear)
 
-        if (isSettled) {
+        if (isSettled || isDismissed) {
             null
         } else {
             val summary = MonthlySettlementManager.calculateMonthSummary(
@@ -72,6 +75,7 @@ class MonthlySettlementViewModel : ViewModel() {
             MonthlySettlementManager.markMonthDismissed(summary.month, summary.year)
         }
         _isBannerDismissed.value = true
+        _refreshTrigger.value = System.currentTimeMillis()
     }
 
     fun sweepToGoal(goalId: Long, amount: BigDecimal) {
@@ -85,6 +89,8 @@ class MonthlySettlementViewModel : ViewModel() {
                     year = summary.year
                 )
                 _isBottomSheetVisible.value = false
+                _isBannerDismissed.value = true
+                _refreshTrigger.value = System.currentTimeMillis()
                 _eventChannel.send(UiEvent.ShowSnackbar("🎉 Swept ₹${amount.toPlainString()} into savings goal! ${summary.monthName} is settled."))
                 _eventChannel.send(UiEvent.Success)
             } catch (e: Exception) {
@@ -103,6 +109,8 @@ class MonthlySettlementViewModel : ViewModel() {
                     year = summary.year
                 )
                 _isBottomSheetVisible.value = false
+                _isBannerDismissed.value = true
+                _refreshTrigger.value = System.currentTimeMillis()
                 _eventChannel.send(UiEvent.ShowSnackbar("🔄 Rolled over ₹${amount.toPlainString()} to this month's budget! ${summary.monthName} is settled."))
                 _eventChannel.send(UiEvent.Success)
             } catch (e: Exception) {
@@ -121,6 +129,8 @@ class MonthlySettlementViewModel : ViewModel() {
                     year = summary.year
                 )
                 _isBottomSheetVisible.value = false
+                _isBannerDismissed.value = true
+                _refreshTrigger.value = System.currentTimeMillis()
                 _eventChannel.send(UiEvent.ShowSnackbar("🍃 ${summary.monthName} closed with a clean slate!"))
                 _eventChannel.send(UiEvent.Success)
             } catch (e: Exception) {

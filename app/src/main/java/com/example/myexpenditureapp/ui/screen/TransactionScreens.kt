@@ -1444,13 +1444,17 @@ fun TransactionEditScreen(
 fun TransactionReviewScreen(
     transaction: Transaction,
     categories: List<Category> = emptyList(),
-    onMarkAsReviewed: (categoryId: Long?, saveAsRule: Boolean) -> Unit,
+    onMarkAsReviewed: (merchant: String, amount: BigDecimal, categoryId: Long?, type: String, saveAsRule: Boolean) -> Unit,
     onDelete: ((Transaction) -> Unit)? = null,
     onBack: () -> Unit
 ) {
+    var merchant by remember { mutableStateOf(transaction.merchant) }
+    var amountText by remember { mutableStateOf(transaction.amount.stripTrailingZeros().toPlainString()) }
+    var type by remember { mutableStateOf(transaction.type) }
     var selectedCategoryId by remember { mutableStateOf(transaction.categoryId) }
     var saveAsRule by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    val haptic = LocalHapticFeedback.current
 
     if (showDeleteConfirmDialog && onDelete != null) {
         AlertDialog(
@@ -1500,28 +1504,80 @@ fun TransactionReviewScreen(
             Icon(
                 Icons.AutoMirrored.Filled.ReceiptLong,
                 contentDescription = null,
-                modifier = Modifier.size(60.dp),
+                modifier = Modifier.size(52.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
-            
+
+            // Live Amount Preview
+            val parsedAmount = try {
+                val evaluated = evaluateExpression(amountText)
+                if (evaluated != null) BigDecimal(evaluated) else transaction.amount
+            } catch (e: Exception) {
+                transaction.amount
+            }
+
             Text(
-                text = transaction.merchant,
-                style = MaterialTheme.typography.headlineMedium,
+                text = parsedAmount.formatIndian(includeSymbol = true, includeDecimals = parsedAmount.scale() > 0 || parsedAmount.remainder(BigDecimal.ONE).compareTo(BigDecimal.ZERO) != 0),
+                style = MaterialTheme.typography.displaySmall.copy(fontFamily = MonospaceFont),
+                color = if (type == "Income") IncomeGreen else ExpenseRed,
                 fontWeight = FontWeight.Bold
             )
-            
-            Text(
-                text = transaction.amount.formatIndian(includeSymbol = true, includeDecimals = false),
-                style = MaterialTheme.typography.displaySmall.copy(fontFamily = MonospaceFont),
-                color = if (transaction.type == "Income") IncomeGreen else ExpenseRed
+
+            // Segmented Transaction Type Selector
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                listOf("Expense" to ExpenseRed, "Income" to IncomeGreen, "Transfer" to BlueAccent).forEach { (t, activeColor) ->
+                    val isSelected = type == t
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(
+                                if (isSelected) activeColor.copy(alpha = 0.2f) else Color.Transparent
+                            )
+                            .clickable {
+                                type = t
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = t,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                            color = if (isSelected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            // Editable Amount Field
+            CalculatorTextField(
+                value = amountText,
+                onValueChange = { amountText = it },
+                label = "Amount"
             )
-            
-            Text(
-                text = transaction.type,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.secondary
+
+            // Editable Merchant / Title Field
+            OutlinedTextField(
+                value = merchant,
+                onValueChange = { merchant = it },
+                label = { Text("Merchant / Description") },
+                placeholder = { Text("e.g. Swiggy, Amazon, Salary") },
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = { Icon(Icons.Default.Storefront, contentDescription = null) },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp)
             )
-            
+
+            // Timestamp Info Chip
             Surface(
                 shape = RoundedCornerShape(10.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -1541,7 +1597,8 @@ fun TransactionReviewScreen(
                     )
                 }
             }
-            
+
+            // Raw SMS Message Card
             if (!transaction.rawMessage.isNullOrBlank()) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -1578,7 +1635,7 @@ fun TransactionReviewScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
             Text(
                 "Assign Category",
@@ -1595,6 +1652,7 @@ fun TransactionReviewScreen(
 
             if (selectedCategoryId != null) {
                 val cat = categories.find { it.id == selectedCategoryId }
+                val displayMerchant = merchant.trim().ifBlank { transaction.merchant }
                 Card(
                     modifier = Modifier.fillMaxWidth().clickable { saveAsRule = !saveAsRule },
                     shape = RoundedCornerShape(12.dp),
@@ -1612,7 +1670,7 @@ fun TransactionReviewScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            "Always categorize '${transaction.merchant}' as ${cat?.name ?: "this category"}",
+                            "Always categorize '$displayMerchant' as ${cat?.name ?: "this category"}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -1621,13 +1679,22 @@ fun TransactionReviewScreen(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             Button(
-                onClick = { onMarkAsReviewed(selectedCategoryId, saveAsRule) },
+                onClick = {
+                    val finalAmount = try {
+                        val evaluated = evaluateExpression(amountText)
+                        if (evaluated != null) BigDecimal(evaluated) else transaction.amount
+                    } catch (e: Exception) {
+                        transaction.amount
+                    }
+                    val finalMerchant = merchant.trim().ifBlank { transaction.merchant }
+                    onMarkAsReviewed(finalMerchant, finalAmount, selectedCategoryId, type, saveAsRule)
+                },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = RoundedCornerShape(16.dp)
             ) {
-                Text("Confirm & Mark as Reviewed", style = MaterialTheme.typography.titleMedium)
+                Text("Confirm & Save", style = MaterialTheme.typography.titleMedium)
             }
 
             if (onDelete != null) {
@@ -1643,7 +1710,7 @@ fun TransactionReviewScreen(
                     Text("Discard Misread SMS", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 }
             }
-            
+
             OutlinedButton(
                 onClick = onBack,
                 modifier = Modifier.fillMaxWidth().height(56.dp),

@@ -240,16 +240,32 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    fun reviewTransaction(transactionId: Long, categoryId: Long? = null, saveAsRule: Boolean = false) {
+    fun reviewTransaction(
+        transactionId: Long,
+        merchant: String? = null,
+        amount: BigDecimal? = null,
+        categoryId: Long? = null,
+        type: String? = null,
+        saveAsRule: Boolean = false
+    ) {
         viewModelScope.launch {
             val tx = transactionRepository.getTransactionById(transactionId) ?: return@launch
-            val updated = tx.copy(categoryId = categoryId ?: tx.categoryId, isReviewed = true)
+            val finalMerchant = merchant?.trim()?.ifBlank { tx.merchant } ?: tx.merchant
+            val finalAmount = if (amount != null && amount > BigDecimal.ZERO) amount else tx.amount
+            val finalType = type ?: tx.type
+            val updated = tx.copy(
+                merchant = finalMerchant,
+                amount = finalAmount,
+                categoryId = categoryId ?: tx.categoryId,
+                type = finalType,
+                isReviewed = true
+            )
             transactionRepository.saveTransaction(updated)
-            if (saveAsRule && categoryId != null && tx.merchant.isNotBlank()) {
+            if (saveAsRule && categoryId != null && finalMerchant.isNotBlank()) {
                 try {
                     Graph.autoCategoryRuleRepository.saveRule(
                         com.example.myexpenditureapp.data.entity.AutoCategoryRule(
-                            keyword = tx.merchant.trim().uppercase(),
+                            keyword = finalMerchant.trim().uppercase(),
                             categoryId = categoryId,
                             matchType = "CONTAINS"
                         )
@@ -259,7 +275,7 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
                 }
             }
             NotificationHelper.triggerBudgetCheck(getApplication())
-            _eventFlow.emit(UiEvent.ShowSnackbar("Transaction reviewed!"))
+            _eventFlow.emit(UiEvent.ShowSnackbar("Transaction reviewed & saved!"))
             _eventFlow.emit(UiEvent.Success)
         }
     }

@@ -359,23 +359,24 @@ fun SwipeablePendingTransactionItem(
     onReviewDetail: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            when (value) {
-                SwipeToDismissBoxValue.StartToEnd -> {
-                    // Swiped Right -> Approve
-                    onMarkAsReviewed()
-                    true
+    key(transaction.id) {
+        val dismissState = rememberSwipeToDismissBoxState(
+            confirmValueChange = { value ->
+                when (value) {
+                    SwipeToDismissBoxValue.StartToEnd -> {
+                        // Swiped Right -> Approve
+                        onMarkAsReviewed()
+                        true
+                    }
+                    SwipeToDismissBoxValue.EndToStart -> {
+                        // Swiped Left -> Reject / Discard
+                        onDeleteUnreviewed()
+                        true
+                    }
+                    SwipeToDismissBoxValue.Settled -> false
                 }
-                SwipeToDismissBoxValue.EndToStart -> {
-                    // Swiped Left -> Reject / Discard
-                    onDeleteUnreviewed()
-                    true
-                }
-                SwipeToDismissBoxValue.Settled -> false
             }
-        }
-    )
+        )
 
     SwipeToDismissBox(
         state = dismissState,
@@ -539,4 +540,5 @@ fun SwipeablePendingTransactionItem(
             }
         }
     }
+}
 }
