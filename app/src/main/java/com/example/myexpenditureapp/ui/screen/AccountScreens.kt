@@ -81,6 +81,7 @@ fun AccountListScreen(
     val txUiState by transactionViewModel.uiState.collectAsStateWithLifecycle()
     val categories by budgetViewModel.allCategories.collectAsStateWithLifecycle()
     val goals by com.example.myexpenditureapp.data.Graph.savingGoalRepository.getAllGoals().collectAsStateWithLifecycle(initialValue = emptyList())
+    val subscriptions by com.example.myexpenditureapp.data.Graph.subscriptionRepository.getAllSubscriptions().collectAsStateWithLifecycle(initialValue = emptyList())
     
     val unsettledSummary by settlementViewModel.unsettledMonthSummary.collectAsStateWithLifecycle()
     val isSettlementBannerDismissed by settlementViewModel.isBannerDismissed.collectAsStateWithLifecycle()
@@ -111,6 +112,16 @@ fun AccountListScreen(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
+    }
+
+    val smartDigest = remember(txUiState.transactions, categories, budgetsWithProgress, subscriptions, goals) {
+        com.example.myexpenditureapp.domain.insights.DigestCalculator.calculateDigest(
+            transactions = txUiState.transactions,
+            categories = categories,
+            budgets = budgetsWithProgress.map { it.budget },
+            subscriptions = subscriptions,
+            savingGoals = goals
+        )
     }
 
     val smartInsights = remember(txUiState.transactions, categories, budgetsWithProgress, accounts) {
@@ -253,11 +264,19 @@ fun AccountListScreen(
                 )
             }
 
-            // SMART FINANCIAL DIGEST
-            if (smartInsights.isNotEmpty()) {
-                item {
-                    com.example.myexpenditureapp.ui.component.FinancialDigestSection(insights = smartInsights)
-                }
+            // SMART FINANCE DIGEST (4-Pillar Rework)
+            item {
+                com.example.myexpenditureapp.ui.component.SmartFinanceDigestCard(
+                    digest = smartDigest,
+                    onTacticalActionClick = { actionType ->
+                        when (actionType) {
+                            com.example.myexpenditureapp.domain.insights.ActionType.REVIEW_TRANSACTIONS -> onOpenSmartInbox()
+                            com.example.myexpenditureapp.domain.insights.ActionType.SWEEP_TO_GOAL -> onOpenGoals()
+                            com.example.myexpenditureapp.domain.insights.ActionType.REDUCE_BUDGET -> { /* Nav or handled in budget tab */ }
+                            com.example.myexpenditureapp.domain.insights.ActionType.VIEW_SUBSCRIPTIONS -> { /* Handled in settings/radar */ }
+                        }
+                    }
+                )
             }
 
             // SAVINGS GOALS & POCKETS PREVIEW
