@@ -19,6 +19,7 @@ object DigestCalculator {
         budgets: List<Budget>,
         subscriptions: List<Subscription>,
         savingGoals: List<SavingGoal>,
+        totalLiquidBalance: BigDecimal = BigDecimal.ZERO,
         nowTimestamp: Long = System.currentTimeMillis()
     ): SmartDigestModel {
         val cal = Calendar.getInstance().apply { timeInMillis = nowTimestamp }
@@ -28,6 +29,14 @@ object DigestCalculator {
         val totalDaysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
         val daysRemaining = (totalDaysInMonth - currentDay + 1).coerceAtLeast(1)
         val monthName = SimpleDateFormat("MMMM", Locale.getDefault()).format(cal.time)
+
+        val todayStart = Calendar.getInstance().apply {
+            timeInMillis = nowTimestamp
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
 
         // Filter this month's transactions
         val thisMonthTxs = transactions.filter { tx ->
@@ -40,6 +49,8 @@ object DigestCalculator {
 
         val totalSpent = expenses.fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) }
         val totalIncome = incomes.fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) }
+        val todayBurn = expenses.filter { it.timestamp >= todayStart }
+            .fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) }
 
         val totalBudget = budgets
             .filter { it.month == currentMonth && it.year == currentYear }
@@ -181,12 +192,14 @@ object DigestCalculator {
         return SmartDigestModel(
             healthStatus = healthStatus,
             healthScore = healthScore,
+            totalLiquidBalance = totalLiquidBalance,
             safeDailySpend = safeDailySpend,
             daysRemainingInMonth = daysRemaining,
             totalDaysInMonth = totalDaysInMonth,
             currentDayOfMonth = currentDay,
             monthName = monthName,
             totalSpentThisMonth = totalSpent,
+            todayBurn = todayBurn,
             totalBudgetThisMonth = totalBudget,
             totalIncomeThisMonth = totalIncome,
             budgetConsumedPercent = budgetConsumedPercent,

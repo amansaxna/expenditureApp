@@ -94,7 +94,7 @@ class TransactionOverlayActivity : ComponentActivity() {
                     TransactionOverlayDialog(
                         transaction = currentTx,
                         categories = categories,
-                        onConfirm = { merchant, amount, type, categoryId, saveAsRule ->
+                        onConfirm = { merchant, amount, type, categoryId, message, saveAsRule ->
                             lifecycleScope.launch {
                                 actionHandler.confirmTransaction(
                                     transaction = currentTx,
@@ -102,6 +102,7 @@ class TransactionOverlayActivity : ComponentActivity() {
                                     updatedAmount = amount,
                                     updatedType = type,
                                     categoryId = categoryId,
+                                    updatedMessage = message,
                                     saveAsRule = saveAsRule
                                 )
                                 Toast.makeText(applicationContext, "Transaction Confirmed!", Toast.LENGTH_SHORT).show()
@@ -134,7 +135,7 @@ class TransactionOverlayActivity : ComponentActivity() {
 fun TransactionOverlayDialog(
     transaction: Transaction,
     categories: List<Category>,
-    onConfirm: (merchant: String, amount: BigDecimal, type: String, categoryId: Long?, saveAsRule: Boolean) -> Unit,
+    onConfirm: (merchant: String, amount: BigDecimal, type: String, categoryId: Long?, message: String?, saveAsRule: Boolean) -> Unit,
     onDiscard: () -> Unit,
     onOpenFullEdit: () -> Unit,
     onDismiss: () -> Unit
@@ -142,6 +143,7 @@ fun TransactionOverlayDialog(
     var merchant by remember { mutableStateOf(transaction.merchant) }
     var amountText by remember { mutableStateOf(transaction.amount.stripTrailingZeros().toPlainString()) }
     var type by remember { mutableStateOf(transaction.type) }
+    var messageText by remember { mutableStateOf(transaction.rawMessage ?: "") }
     var selectedCategoryId by remember { mutableStateOf(transaction.categoryId) }
     var saveAsRule by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
@@ -289,6 +291,27 @@ fun TransactionOverlayDialog(
                     )
                 }
 
+                // Editable Message / SMS Notes Field
+                OutlinedTextField(
+                    value = messageText,
+                    onValueChange = { messageText = it },
+                    label = { Text("Message / SMS Notes") },
+                    placeholder = { Text("Original bank SMS or notes") },
+                    modifier = Modifier.fillMaxWidth(),
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Sms,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    minLines = 1,
+                    maxLines = 3,
+                    shape = RoundedCornerShape(12.dp),
+                    textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = MonospaceFont)
+                )
+
                 // Quick Category Selector Chips
                 Text(
                     text = "Select Category",
@@ -355,7 +378,8 @@ fun TransactionOverlayDialog(
                         onClick = {
                             val finalAmount = amountText.toBigDecimalOrNull() ?: transaction.amount
                             val finalMerchant = merchant.trim().ifBlank { transaction.merchant }
-                            onConfirm(finalMerchant, finalAmount, type, selectedCategoryId, saveAsRule)
+                            val finalMessage = messageText.trim().ifBlank { null }
+                            onConfirm(finalMerchant, finalAmount, type, selectedCategoryId, finalMessage, saveAsRule)
                         },
                         modifier = Modifier
                             .fillMaxWidth()

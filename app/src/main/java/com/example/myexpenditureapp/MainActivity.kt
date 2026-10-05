@@ -336,13 +336,14 @@ fun MainScreen(shortcutAction: String? = null) {
                             TransactionReviewScreen(
                                 transaction = it,
                                 categories = categories,
-                                onMarkAsReviewed = { merch, amt, catId, txType, saveAsRule ->
+                                onMarkAsReviewed = { merch, amt, catId, txType, msg, saveAsRule ->
                                     viewModel.reviewTransaction(
                                         transactionId = it.id,
                                         merchant = merch,
                                         amount = amt,
                                         categoryId = catId,
                                         type = txType,
+                                        message = msg,
                                         saveAsRule = saveAsRule
                                     )
                                     backStack.removeLastOrNull()
@@ -442,8 +443,8 @@ fun MainScreen(shortcutAction: String? = null) {
                                 transaction = transactionToEdit,
                                 accounts = uiState.accounts,
                                 categories = uiState.categories,
-                                onSave = { accId, toAccId, catId, amt, merch, type, time, id, tags, saveAsRule ->
-                                    viewModel.saveTransaction(accId, toAccId, catId, amt, merch, type, time, id, tags, saveAsRule)
+                                onSave = { accId, toAccId, catId, amt, merch, type, time, id, tags, msg, saveAsRule ->
+                                    viewModel.saveTransaction(accId, toAccId, catId, amt, merch, type, time, id, tags, msg, saveAsRule)
                                 },
                                 onDelete = {
                                     viewModel.deleteTransaction(it)

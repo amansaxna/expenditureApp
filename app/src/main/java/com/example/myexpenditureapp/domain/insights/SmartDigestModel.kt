@@ -36,12 +36,14 @@ enum class ActionType {
 data class SmartDigestModel(
     val healthStatus: HealthStatus,
     val healthScore: Int, // 0..100
+    val totalLiquidBalance: BigDecimal = BigDecimal.ZERO,
     val safeDailySpend: BigDecimal,
     val daysRemainingInMonth: Int,
     val totalDaysInMonth: Int,
     val currentDayOfMonth: Int,
     val monthName: String,
     val totalSpentThisMonth: BigDecimal,
+    val todayBurn: BigDecimal = BigDecimal.ZERO,
     val totalBudgetThisMonth: BigDecimal,
     val totalIncomeThisMonth: BigDecimal,
     val budgetConsumedPercent: Int,

@@ -16,6 +16,7 @@ class OverlayActionHandler(
         updatedAmount: BigDecimal,
         updatedType: String,
         categoryId: Long?,
+        updatedMessage: String? = transaction.rawMessage,
         saveAsRule: Boolean
     ) {
         val updated = transaction.copy(
@@ -23,6 +24,7 @@ class OverlayActionHandler(
             amount = updatedAmount,
             type = updatedType,
             categoryId = categoryId,
+            rawMessage = updatedMessage,
             isReviewed = true
         )
         transactionRepository.saveTransaction(updated)

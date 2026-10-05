@@ -118,6 +118,37 @@ class OverlayActionHandlerTest {
     }
 
     @Test
+    fun testConfirmTransactionUpdatesMessage() = runTest {
+        val initialTx = Transaction(
+            id = 101L,
+            accountId = 1L,
+            categoryId = null,
+            amount = BigDecimal("250"),
+            merchant = "Uber",
+            timestamp = 1000L,
+            type = "Expense",
+            rawMessage = "Rs 250 paid to Uber via UPI ref 12345",
+            isReviewed = false
+        )
+        transactionRepo.saveTransaction(initialTx)
+
+        actionHandler.confirmTransaction(
+            transaction = initialTx,
+            updatedMerchant = "Uber Cab",
+            updatedAmount = BigDecimal("250"),
+            updatedType = "Expense",
+            categoryId = 3L,
+            updatedMessage = "Ride to office - Rs 250",
+            saveAsRule = false
+        )
+
+        val saved = transactionRepo.savedTransactions.first { it.id == 101L }
+        assertEquals("Uber Cab", saved.merchant)
+        assertEquals("Ride to office - Rs 250", saved.rawMessage)
+        assertTrue(saved.isReviewed)
+    }
+
+    @Test
     fun testDiscardTransactionDeletesIt() = runTest {
         val tx = Transaction(
             id = 200L,

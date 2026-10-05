@@ -815,13 +815,14 @@ fun TransactionEditScreen(
     transaction: Transaction? = null,
     accounts: List<Account>,
     categories: List<Category>,
-    onSave: (accountId: Long, toAccountId: Long?, categoryId: Long?, amount: BigDecimal, merchant: String, type: String, timestamp: Long, id: Long, tags: List<String>, saveAsRule: Boolean) -> Unit,
+    onSave: (accountId: Long, toAccountId: Long?, categoryId: Long?, amount: BigDecimal, merchant: String, type: String, timestamp: Long, id: Long, tags: List<String>, message: String?, saveAsRule: Boolean) -> Unit,
     onDelete: (Transaction) -> Unit,
     onBack: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
     var amount by remember { mutableStateOf(transaction?.amount?.stripTrailingZeros()?.toPlainString() ?: "") }
     var merchant by remember { mutableStateOf(transaction?.merchant ?: "") }
+    var rawMessage by remember { mutableStateOf(transaction?.rawMessage ?: "") }
     var type by remember { mutableStateOf(transaction?.type ?: "Expense") }
     var accountId by remember { mutableStateOf(transaction?.accountId ?: accounts.firstOrNull()?.id ?: 0L) }
     var toAccountId by remember { mutableStateOf(transaction?.toAccountId ?: accounts.firstOrNull()?.id ?: 0L) }
@@ -992,6 +993,19 @@ fun TransactionEditScreen(
                 leadingIcon = { Icon(Icons.Default.Description, contentDescription = null) },
                 singleLine = true,
                 shape = RoundedCornerShape(14.dp)
+            )
+
+            OutlinedTextField(
+                value = rawMessage,
+                onValueChange = { rawMessage = it },
+                label = { Text("Message / SMS Notes (Optional)") },
+                placeholder = { Text("Original bank SMS or custom note") },
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = { Icon(Icons.Default.Sms, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                minLines = 1,
+                maxLines = 3,
+                shape = RoundedCornerShape(14.dp),
+                textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = MonospaceFont)
             )
 
             // Date & Time Selection
@@ -1267,6 +1281,7 @@ fun TransactionEditScreen(
                         timestamp,
                         transaction?.id ?: 0L,
                         tags,
+                        rawMessage.trim().ifBlank { null },
                         saveAsRule
                     )
                 },
@@ -1444,13 +1459,14 @@ fun TransactionEditScreen(
 fun TransactionReviewScreen(
     transaction: Transaction,
     categories: List<Category> = emptyList(),
-    onMarkAsReviewed: (merchant: String, amount: BigDecimal, categoryId: Long?, type: String, saveAsRule: Boolean) -> Unit,
+    onMarkAsReviewed: (merchant: String, amount: BigDecimal, categoryId: Long?, type: String, message: String?, saveAsRule: Boolean) -> Unit,
     onDelete: ((Transaction) -> Unit)? = null,
     onBack: () -> Unit
 ) {
     var merchant by remember { mutableStateOf(transaction.merchant) }
     var amountText by remember { mutableStateOf(transaction.amount.stripTrailingZeros().toPlainString()) }
     var type by remember { mutableStateOf(transaction.type) }
+    var rawMessage by remember { mutableStateOf(transaction.rawMessage ?: "") }
     var selectedCategoryId by remember { mutableStateOf(transaction.categoryId) }
     var saveAsRule by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
@@ -1598,42 +1614,26 @@ fun TransactionReviewScreen(
                 }
             }
 
-            // Raw SMS Message Card
-            if (!transaction.rawMessage.isNullOrBlank()) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    ),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.Sms,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                "ORIGINAL MESSAGE / SMS",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                                letterSpacing = 0.5.sp
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = transaction.rawMessage,
-                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = MonospaceFont),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
+            // Editable Raw Message / SMS Notes Field
+            OutlinedTextField(
+                value = rawMessage,
+                onValueChange = { rawMessage = it },
+                label = { Text("Message / SMS Notes") },
+                placeholder = { Text("Original bank SMS or custom note") },
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.Sms,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                minLines = 2,
+                maxLines = 4,
+                shape = RoundedCornerShape(14.dp),
+                textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = MonospaceFont)
+            )
 
             Spacer(modifier = Modifier.height(4.dp))
 
@@ -1689,7 +1689,8 @@ fun TransactionReviewScreen(
                         transaction.amount
                     }
                     val finalMerchant = merchant.trim().ifBlank { transaction.merchant }
-                    onMarkAsReviewed(finalMerchant, finalAmount, selectedCategoryId, type, saveAsRule)
+                    val finalMessage = rawMessage.trim().ifBlank { null }
+                    onMarkAsReviewed(finalMerchant, finalAmount, selectedCategoryId, type, finalMessage, saveAsRule)
                 },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = RoundedCornerShape(16.dp)

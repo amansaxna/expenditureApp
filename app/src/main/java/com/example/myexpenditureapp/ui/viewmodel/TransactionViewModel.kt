@@ -139,6 +139,7 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
         timestamp: Long = System.currentTimeMillis(),
         id: Long = 0L,
         tags: List<String> = emptyList(),
+        message: String? = null,
         saveAsRule: Boolean = false
     ) {
         if (amount <= BigDecimal.ZERO) {
@@ -160,6 +161,8 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
 
         viewModelScope.launch {
             try {
+                val existingTx = if (id != 0L) transactionRepository.getTransactionById(id) else null
+                val finalMessage = message?.trim()?.ifBlank { null } ?: existingTx?.rawMessage
                 val transaction = Transaction(
                     id = id,
                     accountId = accountId,
@@ -169,6 +172,7 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
                     merchant = merchant,
                     type = type,
                     timestamp = timestamp,
+                    rawMessage = finalMessage,
                     isReviewed = true,
                     tags = tags
                 )
@@ -246,6 +250,7 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
         amount: BigDecimal? = null,
         categoryId: Long? = null,
         type: String? = null,
+        message: String? = null,
         saveAsRule: Boolean = false
     ) {
         viewModelScope.launch {
@@ -253,11 +258,13 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
             val finalMerchant = merchant?.trim()?.ifBlank { tx.merchant } ?: tx.merchant
             val finalAmount = if (amount != null && amount > BigDecimal.ZERO) amount else tx.amount
             val finalType = type ?: tx.type
+            val finalMessage = message?.trim()?.ifBlank { null } ?: tx.rawMessage
             val updated = tx.copy(
                 merchant = finalMerchant,
                 amount = finalAmount,
                 categoryId = categoryId ?: tx.categoryId,
                 type = finalType,
+                rawMessage = finalMessage,
                 isReviewed = true
             )
             transactionRepository.saveTransaction(updated)

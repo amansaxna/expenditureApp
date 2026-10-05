@@ -114,13 +114,16 @@ fun AccountListScreen(
         }
     }
 
-    val smartDigest = remember(txUiState.transactions, categories, budgetsWithProgress, subscriptions, goals) {
+    val totalBalance = accounts.fold(BigDecimal.ZERO) { acc, a -> acc.add(a.balance) }
+
+    val smartDigest = remember(txUiState.transactions, categories, budgetsWithProgress, subscriptions, goals, totalBalance) {
         com.example.myexpenditureapp.domain.insights.DigestCalculator.calculateDigest(
             transactions = txUiState.transactions,
             categories = categories,
             budgets = budgetsWithProgress.map { it.budget },
             subscriptions = subscriptions,
-            savingGoals = goals
+            savingGoals = goals,
+            totalLiquidBalance = totalBalance
         )
     }
 
@@ -132,8 +135,6 @@ fun AccountListScreen(
             accounts = accounts
         )
     }
-
-    val totalBalance = accounts.fold(BigDecimal.ZERO) { acc, a -> acc.add(a.balance) }
 
     val cal = remember { java.util.Calendar.getInstance() }
     val currentDay = cal.get(java.util.Calendar.DAY_OF_MONTH).coerceAtLeast(1)
@@ -253,18 +254,7 @@ fun AccountListScreen(
                 }
             }
 
-            item {
-                DashboardPacedHeroCard(
-                    totalNetBalance = totalBalance,
-                    monthlySpent = monthlySpent,
-                    todayBurn = todaySpent,
-                    dailyAverage = dailyAverage,
-                    daysRemainingInMonth = daysRemaining,
-                    totalBudget = totalBudget
-                )
-            }
-
-            // SMART FINANCE DIGEST (4-Pillar Rework)
+            // UNIFIED COMMAND CENTER (Total Liquid Balance & Smart Digest)
             item {
                 com.example.myexpenditureapp.ui.component.SmartFinanceDigestCard(
                     digest = smartDigest,

@@ -1,8 +1,6 @@
 package com.example.myexpenditureapp.ui.component
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,6 +29,7 @@ import com.example.myexpenditureapp.domain.insights.HealthStatus
 import com.example.myexpenditureapp.domain.insights.SmartDigestModel
 import com.example.myexpenditureapp.ui.theme.*
 import com.example.myexpenditureapp.utils.formatIndian
+import java.math.BigDecimal
 
 @Composable
 fun SmartFinanceDigestCard(
@@ -51,10 +50,10 @@ fun SmartFinanceDigestCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(26.dp))
             .clickable { onCardClick() }
             .animateContentSize(),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(26.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         ),
@@ -63,8 +62,8 @@ fun SmartFinanceDigestCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Header Row: Section Label + Health Badge
             Row(
@@ -83,10 +82,10 @@ fun SmartFinanceDigestCard(
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = "SMART FINANCE DIGEST",
+                        text = "TOTAL LIQUID BALANCE & DIGEST",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 0.8.sp,
+                        letterSpacing = 0.6.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -100,7 +99,7 @@ fun SmartFinanceDigestCard(
                     Row(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
                         Surface(
                             modifier = Modifier.size(7.dp),
@@ -110,54 +109,120 @@ fun SmartFinanceDigestCard(
                         Text(
                             text = "${digest.healthStatus.label.uppercase()} • ${digest.healthScore}",
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.ExtraBold,
                             color = statusColor
                         )
                     }
                 }
             }
 
-            // Beat 1: The Vital Pulse (Safe Daily Spend)
+            // PRIMARY HERO: Total Liquid Balance
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    text = "SAFE DAILY ALLOWANCE",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.SemiBold
+                    text = digest.totalLiquidBalance.formatIndian(includeSymbol = true, includeDecimals = false),
+                    style = MaterialTheme.typography.displaySmall.copy(
+                        fontFamily = MonospaceFont,
+                        fontWeight = FontWeight.Black
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-
-                Row(
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = digest.safeDailySpend.formatIndian(includeSymbol = true, includeDecimals = false),
-                        style = MaterialTheme.typography.headlineLarge.copy(fontFamily = MonospaceFont),
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "/ day",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
-                }
-
                 Text(
-                    text = "Calculated for the remaining ${digest.daysRemainingInMonth} days in ${digest.monthName}",
+                    text = "Across all active accounts and wallets",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                thickness = 0.5.dp
-            )
+            // 3-Metric Snapshot Row (Spent This Month • Today's Burn • Safe Allowance)
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.7f),
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Spent This Month
+                    Column {
+                        Text(
+                            text = "Spent (${digest.monthName.take(3)})",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = digest.totalSpentThisMonth.formatIndian(includeSymbol = true, includeDecimals = false),
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontFamily = MonospaceFont,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
 
-            // Beat 2: Timeline Velocity & Pacing
+                    // Divider
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(28.dp)
+                            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                    )
+
+                    // Today's Burn
+                    Column {
+                        Text(
+                            text = "Today's Burn",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = digest.todayBurn.formatIndian(includeSymbol = true, includeDecimals = false),
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontFamily = MonospaceFont,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = if (digest.todayBurn > BigDecimal.ZERO) ExpenseRed else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    // Divider
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(28.dp)
+                            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                    )
+
+                    // Safe Daily Allowance
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "Safe Allowance",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "${digest.safeDailySpend.formatIndian(includeSymbol = true, includeDecimals = false)}/d",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontFamily = MonospaceFont,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = if (digest.isSpendingSlower) IncomeGreen else statusColor
+                        )
+                    }
+                }
+            }
+
+            // Beat 2: Timeline Velocity & Pacing Track
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -176,32 +241,64 @@ fun SmartFinanceDigestCard(
                     )
                 }
 
-                // Visual Pacing Track
-                Box(
+                // Dual Progress Track (Month Timeline Elapsed vs Budget Consumed)
+                val timeRatio = (digest.expectedTimeElapsedPercent / 100f).coerceIn(0f, 1f)
+                val budgetRatio = (digest.budgetConsumedPercent / 100f).coerceIn(0f, 1f)
+                val activeColor = if (digest.isSpendingSlower) IncomeGreen else ExpenseRed
+                val trackBg = MaterialTheme.colorScheme.surfaceVariant
+                val timelineTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                val markerColor = MaterialTheme.colorScheme.primary
+
+                androidx.compose.foundation.Canvas(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(8.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .height(10.dp)
+                        .clip(RoundedCornerShape(5.dp))
                 ) {
-                    // Budget Consumed Fill
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth((digest.budgetConsumedPercent / 100f).coerceIn(0f, 1f))
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(
-                                        if (digest.isSpendingSlower) IncomeGreen else ExpenseRed,
-                                        if (digest.isSpendingSlower) IncomeGreen.copy(alpha = 0.8f) else ExpenseRed.copy(alpha = 0.8f)
-                                    )
-                                )
-                            )
+                    val w = size.width
+                    val h = size.height
+                    val cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2f, h / 2f)
+
+                    // 1. Base track background
+                    drawRoundRect(
+                        color = trackBg,
+                        size = size,
+                        cornerRadius = cornerRadius
                     )
+
+                    // 2. Month Elapsed Track (shaded up to expectedTimeElapsedPercent)
+                    if (timeRatio > 0f) {
+                        drawRoundRect(
+                            color = timelineTrackColor,
+                            size = androidx.compose.ui.geometry.Size(w * timeRatio, h),
+                            cornerRadius = cornerRadius
+                        )
+                    }
+
+                    // 3. Budget Consumed Bar
+                    if (budgetRatio > 0f) {
+                        drawRoundRect(
+                            brush = Brush.horizontalGradient(
+                                listOf(activeColor, activeColor.copy(alpha = 0.85f))
+                            ),
+                            size = androidx.compose.ui.geometry.Size(w * budgetRatio, h),
+                            cornerRadius = cornerRadius
+                        )
+                    }
+
+                    // 4. Timeline Marker Line / Tick at Month Elapsed position
+                    if (timeRatio in 0.01f..0.99f) {
+                        val markerX = w * timeRatio
+                        drawLine(
+                            color = markerColor,
+                            start = androidx.compose.ui.geometry.Offset(markerX, 0f),
+                            end = androidx.compose.ui.geometry.Offset(markerX, h),
+                            strokeWidth = 2.dp.toPx()
+                        )
+                    }
                 }
 
-                // Pacing Insight Pill
+                // Dynamic Pacing Insight Pill
                 Surface(
                     shape = RoundedCornerShape(10.dp),
                     color = if (digest.isSpendingSlower) IncomeGreen.copy(alpha = 0.1f) else ExpenseRed.copy(alpha = 0.1f)
@@ -233,7 +330,7 @@ fun SmartFinanceDigestCard(
                 }
             }
 
-            // Beat 3: Bento Micro-Insights (Leak Alert & Upcoming Bills)
+            // Beat 3: Bento Micro-Insights (Leak Radar & Upcoming Bills)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
