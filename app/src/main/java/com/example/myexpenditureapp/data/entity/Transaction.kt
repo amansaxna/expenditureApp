@@ -46,5 +46,6 @@ data class Transaction(
     val smsId: String? = null,
     val isReviewed: Boolean = true,
     val tags: List<String> = emptyList(),
-    val rawMessage: String? = null
+    val rawMessage: String? = null,
+    val isMicroOverride: Boolean? = null
 )

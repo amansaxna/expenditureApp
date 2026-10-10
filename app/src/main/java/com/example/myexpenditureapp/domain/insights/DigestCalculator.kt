@@ -20,7 +20,8 @@ object DigestCalculator {
         subscriptions: List<Subscription>,
         savingGoals: List<SavingGoal>,
         totalLiquidBalance: BigDecimal = BigDecimal.ZERO,
-        nowTimestamp: Long = System.currentTimeMillis()
+        nowTimestamp: Long = System.currentTimeMillis(),
+        isOverallHistory: Boolean = false
     ): SmartDigestModel {
         val cal = Calendar.getInstance().apply { timeInMillis = nowTimestamp }
         val currentMonth = cal.get(Calendar.MONTH) + 1
@@ -28,7 +29,7 @@ object DigestCalculator {
         val currentDay = cal.get(Calendar.DAY_OF_MONTH)
         val totalDaysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
         val daysRemaining = (totalDaysInMonth - currentDay + 1).coerceAtLeast(1)
-        val monthName = SimpleDateFormat("MMMM", Locale.getDefault()).format(cal.time)
+        val monthName = if (isOverallHistory) "All-Time" else SimpleDateFormat("MMMM", Locale.getDefault()).format(cal.time)
 
         val todayStart = Calendar.getInstance().apply {
             timeInMillis = nowTimestamp
@@ -38,14 +39,18 @@ object DigestCalculator {
             set(Calendar.MILLISECOND, 0)
         }.timeInMillis
 
-        // Filter this month's transactions
-        val thisMonthTxs = transactions.filter { tx ->
-            val txCal = Calendar.getInstance().apply { timeInMillis = tx.timestamp }
-            txCal.get(Calendar.MONTH) + 1 == currentMonth && txCal.get(Calendar.YEAR) == currentYear
+        // Target transactions (current month vs all-time history)
+        val targetTxs = if (isOverallHistory) {
+            transactions
+        } else {
+            transactions.filter { tx ->
+                val txCal = Calendar.getInstance().apply { timeInMillis = tx.timestamp }
+                txCal.get(Calendar.MONTH) + 1 == currentMonth && txCal.get(Calendar.YEAR) == currentYear
+            }
         }
 
-        val expenses = thisMonthTxs.filter { it.type == "Expense" }
-        val incomes = thisMonthTxs.filter { it.type == "Income" }
+        val expenses = targetTxs.filter { it.type == "Expense" }
+        val incomes = targetTxs.filter { it.type == "Income" }
 
         val totalSpent = expenses.fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) }
         val totalIncome = incomes.fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) }

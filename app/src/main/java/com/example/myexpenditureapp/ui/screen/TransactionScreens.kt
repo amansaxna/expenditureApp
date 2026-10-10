@@ -45,6 +45,8 @@ import com.example.myexpenditureapp.ui.component.StandardTransactionRow
 import com.example.myexpenditureapp.ui.component.CalculatorTextField
 import com.example.myexpenditureapp.ui.component.CategoryTabSelector
 import com.example.myexpenditureapp.ui.component.evaluateExpression
+import com.example.myexpenditureapp.ui.component.BaselineThresholdEditorDialog
+import com.example.myexpenditureapp.ui.viewmodel.SpendTypeFilter
 import com.example.myexpenditureapp.ui.theme.MonospaceFont
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -64,6 +66,7 @@ fun TransactionListScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showFilterDialog by remember { mutableStateOf(false) }
     var showDeleteAllDialog by remember { mutableStateOf(false) }
+    var showThresholdEditorDialog by remember { mutableStateOf(false) }
     var quickEditTransaction by remember { mutableStateOf<Transaction?>(null) }
     val sheetState = rememberModalBottomSheetState()
     val haptic = LocalHapticFeedback.current
@@ -115,7 +118,7 @@ fun TransactionListScreen(
                                 IconButton(onClick = { showFilterDialog = true }) {
                                     BadgedBox(
                                         badge = {
-                                            if (uiState.filterAccountId != null || uiState.filterCategoryId != null) {
+                                            if (uiState.filterAccountId != null || uiState.filterCategoryId != null || uiState.filterSpendType != SpendTypeFilter.ALL) {
                                                 Badge { Text("1") }
                                             }
                                         }
@@ -123,7 +126,7 @@ fun TransactionListScreen(
                                         Icon(
                                             imageVector = Icons.Default.FilterList,
                                             contentDescription = "Filter",
-                                            tint = if (uiState.filterAccountId != null || uiState.filterCategoryId != null)
+                                            tint = if (uiState.filterAccountId != null || uiState.filterCategoryId != null || uiState.filterSpendType != SpendTypeFilter.ALL)
                                                 MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
@@ -140,6 +143,21 @@ fun TransactionListScreen(
                                         expanded = showMenu,
                                         onDismissRequest = { showMenu = false }
                                     ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Edit Baseline Threshold") },
+                                            leadingIcon = {
+                                                Icon(
+                                                    Icons.Default.Tune,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
+                                            },
+                                            onClick = {
+                                                showMenu = false
+                                                showThresholdEditorDialog = true
+                                            }
+                                        )
+                                        HorizontalDivider()
                                         DropdownMenuItem(
                                             text = { Text("Clear All Transactions", color = MaterialTheme.colorScheme.error) },
                                             leadingIcon = { 
@@ -179,8 +197,12 @@ fun TransactionListScreen(
                     categories = uiState.categories,
                     selectedAccountId = uiState.filterAccountId,
                     selectedCategoryId = uiState.filterCategoryId,
+                    selectedSpendType = uiState.filterSpendType,
+                    effectiveThreshold = uiState.effectiveThreshold,
                     onAccountSelected = { viewModel.onFilterAccountChange(it) },
-                    onCategorySelected = { viewModel.onFilterCategoryChange(it) }
+                    onCategorySelected = { viewModel.onFilterCategoryChange(it) },
+                    onSpendTypeSelected = { viewModel.onFilterSpendTypeChange(it) },
+                    onEditThresholdClick = { showThresholdEditorDialog = true }
                 )
             }
         },
@@ -269,9 +291,21 @@ fun TransactionListScreen(
             categories = uiState.categories,
             selectedAccountId = uiState.filterAccountId,
             selectedCategoryId = uiState.filterCategoryId,
+            selectedSpendType = uiState.filterSpendType,
+            effectiveThreshold = uiState.effectiveThreshold,
             onAccountSelected = { viewModel.onFilterAccountChange(it) },
             onCategorySelected = { viewModel.onFilterCategoryChange(it) },
+            onSpendTypeSelected = { viewModel.onFilterSpendTypeChange(it) },
+            onEditThresholdClick = { showThresholdEditorDialog = true },
             onDismiss = { showFilterDialog = false }
+        )
+    }
+
+    if (showThresholdEditorDialog) {
+        BaselineThresholdEditorDialog(
+            currentBaseline = uiState.effectiveThreshold,
+            onSaveThreshold = { newThreshold -> viewModel.onCustomThresholdChange(newThreshold) },
+            onDismiss = { showThresholdEditorDialog = false }
         )
     }
 
@@ -403,43 +437,82 @@ fun FilterDialog(
     categories: List<Category>,
     selectedAccountId: Long?,
     selectedCategoryId: Long?,
+    selectedSpendType: SpendTypeFilter,
+    effectiveThreshold: BigDecimal,
     onAccountSelected: (Long?) -> Unit,
     onCategorySelected: (Long?) -> Unit,
+    onSpendTypeSelected: (SpendTypeFilter) -> Unit,
+    onEditThresholdClick: () -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Filters") },
+        title = { Text("Filter Transactions") },
         text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text("Account", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                FlowRow(
-                    modifier = Modifier.padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = selectedAccountId == null,
-                        onClick = { onAccountSelected(null) },
-                        label = { Text("All") }
-                    )
-                    accounts.forEach { account ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Expenditure Size Section
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Expenditure Size", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        TextButton(onClick = { onDismiss(); onEditThresholdClick() }) {
+                            Text("Edit Baseline", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         FilterChip(
-                            selected = selectedAccountId == account.id,
-                            onClick = { onAccountSelected(account.id) },
-                            label = { Text(account.name) }
+                            selected = selectedSpendType == SpendTypeFilter.ALL,
+                            onClick = { onSpendTypeSelected(SpendTypeFilter.ALL) },
+                            label = { Text("All Sizes") }
+                        )
+                        FilterChip(
+                            selected = selectedSpendType == SpendTypeFilter.MICRO,
+                            onClick = { onSpendTypeSelected(SpendTypeFilter.MICRO) },
+                            label = { Text("☕ Micro (<${effectiveThreshold.formatIndian(includeSymbol = true, includeDecimals = false)})") }
+                        )
+                        FilterChip(
+                            selected = selectedSpendType == SpendTypeFilter.MAJOR,
+                            onClick = { onSpendTypeSelected(SpendTypeFilter.MAJOR) },
+                            label = { Text("🐘 Major (>${effectiveThreshold.formatIndian(includeSymbol = true, includeDecimals = false)})") }
                         )
                     }
                 }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                Text("Category", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 400.dp)
-                        .verticalScroll(rememberScrollState())
-                ) {
+
+                // Account Section
+                Column {
+                    Text("Account", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    FlowRow(
+                        modifier = Modifier.padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = selectedAccountId == null,
+                            onClick = { onAccountSelected(null) },
+                            label = { Text("All Accounts") }
+                        )
+                        accounts.forEach { account ->
+                            FilterChip(
+                                selected = selectedAccountId == account.id,
+                                onClick = { onAccountSelected(account.id) },
+                                label = { Text(account.name) }
+                            )
+                        }
+                    }
+                }
+
+                // Category Section
+                Column {
+                    Text("Category", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     FilterChip(
                         selected = selectedCategoryId == null,
                         onClick = { onCategorySelected(null) },
@@ -460,7 +533,7 @@ fun FilterDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onDismiss) { Text("Done") }
+            Button(onClick = onDismiss) { Text("Apply Filters") }
         }
     )
 }
@@ -512,27 +585,73 @@ fun FilterChipsRow(
     categories: List<Category>,
     selectedAccountId: Long?,
     selectedCategoryId: Long?,
+    selectedSpendType: SpendTypeFilter,
+    effectiveThreshold: BigDecimal,
     onAccountSelected: (Long?) -> Unit,
-    onCategorySelected: (Long?) -> Unit
+    onCategorySelected: (Long?) -> Unit,
+    onSpendTypeSelected: (SpendTypeFilter) -> Unit,
+    onEditThresholdClick: () -> Unit
 ) {
     LazyRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 8.dp),
         contentPadding = PaddingValues(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        // Reset All
         item {
             FilterChip(
-                selected = selectedAccountId != null || selectedCategoryId != null,
+                selected = selectedAccountId == null && selectedCategoryId == null && selectedSpendType == SpendTypeFilter.ALL,
                 onClick = { 
                     onAccountSelected(null)
                     onCategorySelected(null)
+                    onSpendTypeSelected(SpendTypeFilter.ALL)
                 },
                 label = { Text("All") },
-                leadingIcon = if (selectedAccountId == null && selectedCategoryId == null) {
+                leadingIcon = if (selectedAccountId == null && selectedCategoryId == null && selectedSpendType == SpendTypeFilter.ALL) {
                     { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                 } else null
+            )
+        }
+
+        // Micro Spends (< ₹Threshold)
+        item {
+            FilterChip(
+                selected = selectedSpendType == SpendTypeFilter.MICRO,
+                onClick = {
+                    if (selectedSpendType == SpendTypeFilter.MICRO) {
+                        onSpendTypeSelected(SpendTypeFilter.ALL)
+                    } else {
+                        onSpendTypeSelected(SpendTypeFilter.MICRO)
+                    }
+                },
+                label = { Text("☕ Micro (<${effectiveThreshold.formatIndian(includeSymbol = true, includeDecimals = false)})") }
+            )
+        }
+
+        // Major Spends (> ₹Threshold)
+        item {
+            FilterChip(
+                selected = selectedSpendType == SpendTypeFilter.MAJOR,
+                onClick = {
+                    if (selectedSpendType == SpendTypeFilter.MAJOR) {
+                        onSpendTypeSelected(SpendTypeFilter.ALL)
+                    } else {
+                        onSpendTypeSelected(SpendTypeFilter.MAJOR)
+                    }
+                },
+                label = { Text("🐘 Major (>${effectiveThreshold.formatIndian(includeSymbol = true, includeDecimals = false)})") }
+            )
+        }
+
+        // Edit Baseline Button
+        item {
+            AssistChip(
+                onClick = onEditThresholdClick,
+                label = { Text("⚙️ Edit Baseline", style = MaterialTheme.typography.labelSmall) },
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
             )
         }
 

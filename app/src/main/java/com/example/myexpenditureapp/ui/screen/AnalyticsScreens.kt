@@ -59,6 +59,7 @@ fun AnalyticsScreen(
     val drillDownTransactions by viewModel.drillDownTransactions.collectAsStateWithLifecycle(initialValue = emptyList())
     val categorySubBreakdown by viewModel.categorySubBreakdown.collectAsStateWithLifecycle(initialValue = emptyMap())
     val isParentRollupEnabled by viewModel.isParentRollupEnabled.collectAsStateWithLifecycle()
+    val transactions by viewModel.transactions.collectAsStateWithLifecycle(initialValue = emptyList())
 
     val unsettledSummary by settlementViewModel.unsettledMonthSummary.collectAsStateWithLifecycle()
     val isSettlementSheetVisible by settlementViewModel.isBottomSheetVisible.collectAsStateWithLifecycle()
@@ -175,6 +176,13 @@ fun AnalyticsScreen(
 
                 item {
                     KPISection(kpis)
+                }
+
+                item {
+                    MicroExpenditureBreakdownCard(
+                        transactions = transactions,
+                        categories = categories
+                    )
                 }
 
                 item {
@@ -919,7 +927,7 @@ fun AnalyticsMonthPicker(
     onMonthYearSelected: (Int, Int) -> Unit
 ) {
     val scrollState = rememberScrollState()
-    val months = (1..12).toList()
+    val months = listOf(0) + (1..12).toList()
 
     Row(
         modifier = Modifier
@@ -930,13 +938,17 @@ fun AnalyticsMonthPicker(
     ) {
         months.forEach { month ->
             val isSelected = month == selectedMonth
-            val monthName = Calendar.getInstance().apply { set(Calendar.MONTH, month - 1) }
-                .getDisplayName(Calendar.MONTH, Calendar.SHORT, Locale.getDefault())
+            val labelText = if (month == 0) {
+                "🌐 All-Time"
+            } else {
+                Calendar.getInstance().apply { set(Calendar.MONTH, month - 1) }
+                    .getDisplayName(Calendar.MONTH, Calendar.SHORT, Locale.getDefault()) ?: ""
+            }
             
             FilterChip(
                 selected = isSelected,
                 onClick = { onMonthYearSelected(month, selectedYear) },
-                label = { Text(monthName ?: "", fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                label = { Text(labelText, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
                 shape = RoundedCornerShape(14.dp)
             )
         }
@@ -1039,6 +1051,124 @@ fun MonthlyPerformanceCard(performance: com.example.myexpenditureapp.ui.viewmode
                             color = if (performance.netSavings >= java.math.BigDecimal.ZERO) IncomeGreen else ExpenseRed,
                             fontWeight = FontWeight.Bold
                         )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MicroExpenditureBreakdownCard(
+    transactions: List<com.example.myexpenditureapp.data.entity.Transaction>,
+    categories: List<com.example.myexpenditureapp.data.entity.Category>
+) {
+    var customThresholdText by remember { mutableStateOf("") }
+    val customThreshold = customThresholdText.toBigDecimalOrNull()
+
+    val microSummary = remember(transactions, categories, customThreshold) {
+        com.example.myexpenditureapp.domain.insights.MicroSpendAnalyzer.analyze(
+            transactions = transactions,
+            categories = categories,
+            customThresholdOverride = customThreshold
+        )
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        "MICRO VS MACRO EXPENDITURES",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                ) {
+                    Text(
+                        text = "<${microSummary.effectiveThreshold.formatIndian(includeSymbol = true, includeDecimals = false)} Limit",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            // Dual Progress Bar (Micro vs Macro)
+            val microPct = microSummary.microSpendPercentage
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Small Spend: ${microSummary.totalMicroSpend.formatIndian()} ($microPct%)",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Major Spend: ${microSummary.totalMacroSpend.formatIndian()} (${100 - microPct}%)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            LinearProgressIndicator(
+                progress = { (microPct / 100f).coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+                color = ExpenseRed,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+
+            // Category Distribution of Micro Spend
+            if (microSummary.topMicroCategories.isNotEmpty()) {
+                Text(
+                    text = "TOP MICRO-LEAK CATEGORIES",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    microSummary.topMicroCategories.take(3).forEach { cat ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(cat.categoryIcon, fontSize = 14.sp)
+                                Text(cat.categoryName, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                                Text("(${cat.txCount} txs)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Text(
+                                text = cat.microTotal.formatIndian(includeSymbol = true, includeDecimals = false),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = MonospaceFont
+                            )
+                        }
                     }
                 }
             }

@@ -19,6 +19,8 @@ import com.example.myexpenditureapp.R
 import com.example.myexpenditureapp.data.Graph
 import com.example.myexpenditureapp.domain.insights.DigestCalculator
 import com.example.myexpenditureapp.domain.insights.HealthStatus
+import com.example.myexpenditureapp.domain.insights.MicroSpendAnalyzer
+import com.example.myexpenditureapp.domain.insights.MicroSpendSummary
 import com.example.myexpenditureapp.utils.formatIndian
 import kotlinx.coroutines.flow.first
 import java.math.BigDecimal
@@ -106,6 +108,12 @@ class ExpenditureWidget : GlanceAppWidget() {
             totalLiquidBalance = totalBalance
         )
 
+        val microSummary = MicroSpendAnalyzer.analyze(
+            transactions = transactions,
+            categories = categories,
+            safeDailyAllowance = safeDailySpend
+        )
+
         val last7Days = (6 downTo 0).map { dayOffset ->
             val dCal = Calendar.getInstance().apply {
                 add(Calendar.DAY_OF_YEAR, -dayOffset)
@@ -143,6 +151,10 @@ class ExpenditureWidget : GlanceAppWidget() {
                 healthStatusLabel = digest.healthStatus.label.uppercase(),
                 healthScore = digest.healthScore,
                 isOptimal = digest.healthStatus == HealthStatus.OPTIMAL,
+                expectedTimeElapsedPercent = digest.expectedTimeElapsedPercent,
+                budgetConsumedPercent = digest.budgetConsumedPercent,
+                isSpendingSlower = digest.isSpendingSlower,
+                microSummary = microSummary,
                 normalized7Days = normalized7Days,
                 max7DaySpend = max7DaySpend
             )
@@ -165,6 +177,10 @@ class ExpenditureWidget : GlanceAppWidget() {
         healthStatusLabel: String,
         healthScore: Int,
         isOptimal: Boolean,
+        expectedTimeElapsedPercent: Int,
+        budgetConsumedPercent: Int,
+        isSpendingSlower: Boolean,
+        microSummary: MicroSpendSummary,
         normalized7Days: List<Pair<String, Float>>,
         max7DaySpend: BigDecimal
     ) {
@@ -449,6 +465,80 @@ class ExpenditureWidget : GlanceAppWidget() {
                                 )
                             )
                         }
+                    }
+                }
+            }
+
+            Spacer(modifier = GlanceModifier.height(8.dp))
+
+            // NEW: Micro-Expenditure Leakage & Pacing Breakdown Block (Filling Lower Widget Canvas)
+            Column(
+                modifier = GlanceModifier
+                    .fillMaxWidth()
+                    .background(ImageProvider(R.drawable.glance_glass_inner_box))
+                    .padding(8.dp)
+            ) {
+                Row(
+                    modifier = GlanceModifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "MICRO-LEAK RADAR (<${microSummary.effectiveThreshold.formatIndian(includeSymbol = true, includeDecimals = false)})",
+                        style = TextStyle(
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = ColorProvider(Color(0xFFFBBF24))
+                        )
+                    )
+                    Spacer(modifier = GlanceModifier.defaultWeight())
+                    Text(
+                        text = "${microSummary.microTxCount} Small Purchases",
+                        style = TextStyle(
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = ColorProvider(Color(0xFF94A3B8))
+                        )
+                    )
+                }
+
+                Spacer(modifier = GlanceModifier.height(4.dp))
+
+                Row(
+                    modifier = GlanceModifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = GlanceModifier.defaultWeight()) {
+                        Text(
+                            text = "${microSummary.totalMicroSpend.formatIndian()} (${microSummary.microSpendPercentage}% of spend)",
+                            style = TextStyle(
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = ColorProvider(Color.White)
+                            )
+                        )
+                        Text(
+                            text = "${microSummary.topMicroCategoryIcon} Top Leak: ${microSummary.topMicroCategoryName}",
+                            style = TextStyle(
+                                fontSize = 10.sp,
+                                color = ColorProvider(Color(0xFFCBD5E1))
+                            )
+                        )
+                    }
+
+                    Row(
+                        modifier = GlanceModifier
+                            .background(ImageProvider(if (isSpendingSlower) R.drawable.glance_glass_badge_green else R.drawable.glance_glass_badge_amber))
+                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (isSpendingSlower) "🛡️ Controlled" else "⚡ High Pacing",
+                            style = TextStyle(
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = ColorProvider(if (isSpendingSlower) Color(0xFF34D399) else Color(0xFFFBBF24))
+                            )
+                        )
                     }
                 }
             }

@@ -262,6 +262,8 @@ fun AccountListScreen(
             item {
                 com.example.myexpenditureapp.ui.component.SmartFinanceDigestCard(
                     digest = smartDigest,
+                    allTransactions = txUiState.transactions,
+                    allCategories = categories,
                     onTotalBalanceClick = onOpenAccounts,
                     onSpentMonthClick = onOpenTransactions,
                     onTodayBurnClick = onOpenTransactions,

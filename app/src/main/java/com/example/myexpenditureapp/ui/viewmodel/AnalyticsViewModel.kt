@@ -91,6 +91,8 @@ class AnalyticsViewModel : ViewModel() {
             }
             val dateMatch = if (filters.dateRange != null) {
                 tx.timestamp in filters.dateRange
+            } else if (filters.month == 0) {
+                true
             } else {
                 tx.timestamp in monthStart..monthEnd
             }
@@ -291,12 +293,12 @@ class AnalyticsViewModel : ViewModel() {
         calendar.set(year, month - 1, calendar.getActualMaximum(Calendar.DAY_OF_MONTH), 23, 59, 59)
         val endOfMonth = calendar.timeInMillis
         
-        val currentMonthTxs = txs.filter { it.timestamp in startOfMonth..endOfMonth }
+        val currentMonthTxs = if (month == 0) txs else txs.filter { it.timestamp in startOfMonth..endOfMonth }
         val currentSpent = currentMonthTxs.filter { it.type == "Expense" }.fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) }
         val currentIncome = currentMonthTxs.filter { it.type == "Income" }.fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) }
         val currentSavings = currentIncome.subtract(currentSpent)
         
-        val currentBudgets = buds.filter { it.month == month && it.year == year }
+        val currentBudgets = if (month == 0) buds else buds.filter { it.month == month && it.year == year }
         val totalBudgeted = currentBudgets.fold(BigDecimal.ZERO) { acc, b -> acc.add(b.limitAmount) }
         
         // Previous month savings

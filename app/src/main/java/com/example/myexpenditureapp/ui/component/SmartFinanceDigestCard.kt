@@ -1,12 +1,14 @@
 package com.example.myexpenditureapp.ui.component
 
 import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import java.text.SimpleDateFormat
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -26,17 +28,25 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.myexpenditureapp.data.entity.Category
+import com.example.myexpenditureapp.data.entity.Transaction
 import com.example.myexpenditureapp.domain.insights.ActionType
+import com.example.myexpenditureapp.domain.insights.DigestCalculator
 import com.example.myexpenditureapp.domain.insights.HealthStatus
+import com.example.myexpenditureapp.domain.insights.MicroSpendAnalyzer
 import com.example.myexpenditureapp.domain.insights.SmartDigestModel
 import com.example.myexpenditureapp.ui.theme.*
 import com.example.myexpenditureapp.utils.formatIndian
 import java.math.BigDecimal
+import java.util.Calendar
+import java.util.Locale
 
 @Composable
 fun SmartFinanceDigestCard(
     digest: SmartDigestModel,
     modifier: Modifier = Modifier,
+    allTransactions: List<Transaction> = emptyList(),
+    allCategories: List<Category> = emptyList(),
     onTotalBalanceClick: () -> Unit = {},
     onSpentMonthClick: () -> Unit = {},
     onTodayBurnClick: () -> Unit = {},
@@ -51,17 +61,63 @@ fun SmartFinanceDigestCard(
     val haptic = LocalHapticFeedback.current
     var showEditAllowanceDialog by remember { mutableStateOf(false) }
     var showHealthInfoDialog by remember { mutableStateOf(false) }
+    var showMicroDetailDialog by remember { mutableStateOf(false) }
+    var showMajorDetailDialog by remember { mutableStateOf(false) }
+    var showThresholdEditorDialog by remember { mutableStateOf(false) }
+    
+    var isOverallHistory by remember { mutableStateOf(false) }
+    var customThresholdOverride by remember { mutableStateOf<BigDecimal?>(null) }
 
-    val statusColor = when (digest.healthStatus) {
+    val activeDigest = remember(digest, isOverallHistory, allTransactions, allCategories) {
+        if (isOverallHistory && allTransactions.isNotEmpty()) {
+            DigestCalculator.calculateDigest(
+                transactions = allTransactions,
+                categories = allCategories,
+                budgets = emptyList<com.example.myexpenditureapp.data.entity.Budget>(),
+                subscriptions = emptyList<com.example.myexpenditureapp.data.entity.Subscription>(),
+                savingGoals = emptyList<com.example.myexpenditureapp.data.entity.SavingGoal>(),
+                totalLiquidBalance = digest.totalLiquidBalance,
+                isOverallHistory = true
+            )
+        } else {
+            digest
+        }
+    }
+
+    val statusColor = when (activeDigest.healthStatus) {
         HealthStatus.OPTIMAL -> IncomeGreen
         HealthStatus.GUARDED -> AmberWarning
         HealthStatus.STRETCHED -> Color(0xFFFF9800)
         HealthStatus.CRITICAL -> ExpenseRed
     }
 
+    val currentCal = Calendar.getInstance()
+    val currentMonth = currentCal.get(Calendar.MONTH) + 1
+    val currentYear = currentCal.get(Calendar.YEAR)
+
+    val targetTransactions = remember(allTransactions, isOverallHistory) {
+        if (isOverallHistory) {
+            allTransactions
+        } else {
+            allTransactions.filter { tx ->
+                val c = Calendar.getInstance().apply { timeInMillis = tx.timestamp }
+                c.get(Calendar.MONTH) + 1 == currentMonth && c.get(Calendar.YEAR) == currentYear
+            }
+        }
+    }
+
+    val microSummary = remember(targetTransactions, allCategories, activeDigest.safeDailySpend, customThresholdOverride) {
+        MicroSpendAnalyzer.analyze(
+            transactions = targetTransactions,
+            categories = allCategories,
+            safeDailyAllowance = activeDigest.safeDailySpend,
+            customThresholdOverride = customThresholdOverride
+        )
+    }
+
     if (showEditAllowanceDialog) {
         EditSafeAllowanceDialog(
-            digest = digest,
+            digest = activeDigest,
             onSaveBudgetLimit = { newLimit ->
                 onSaveBudgetLimit?.invoke(newLimit)
             },
@@ -71,8 +127,37 @@ fun SmartFinanceDigestCard(
 
     if (showHealthInfoDialog) {
         HealthScoreBreakdownDialog(
-            digest = digest,
+            digest = activeDigest,
             onDismiss = { showHealthInfoDialog = false }
+        )
+    }
+
+    if (showMicroDetailDialog) {
+        MicroExpenditureDetailDialog(
+            allTransactions = allTransactions,
+            allCategories = allCategories,
+            safeDailySpend = activeDigest.safeDailySpend,
+            onEditThresholdClick = { showThresholdEditorDialog = true },
+            onViewAllClick = onSpentMonthClick,
+            onDismiss = { showMicroDetailDialog = false }
+        )
+    }
+
+    if (showMajorDetailDialog) {
+        MajorExpenditureDetailDialog(
+            allTransactions = allTransactions,
+            allCategories = allCategories,
+            safeDailySpend = activeDigest.safeDailySpend,
+            onViewAllClick = onSpentMonthClick,
+            onDismiss = { showMajorDetailDialog = false }
+        )
+    }
+
+    if (showThresholdEditorDialog) {
+        BaselineThresholdEditorDialog(
+            currentBaseline = microSummary.effectiveThreshold,
+            onSaveThreshold = { newThreshold -> customThresholdOverride = newThreshold },
+            onDismiss = { showThresholdEditorDialog = false }
         )
     }
 
@@ -94,7 +179,7 @@ fun SmartFinanceDigestCard(
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Header Row: Section Label + Health Badge
+            // Header Row: Title + Time Horizon Toggle + Health Badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -115,7 +200,7 @@ fun SmartFinanceDigestCard(
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = "TOTAL LIQUID BALANCE & DIGEST",
+                        text = if (isOverallHistory) "OVERALL DIGEST" else "MONTH DIGEST",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.ExtraBold,
                         letterSpacing = 0.6.sp,
@@ -123,33 +208,94 @@ fun SmartFinanceDigestCard(
                     )
                 }
 
-                // Health Status Pill
-                Surface(
-                    modifier = Modifier.clickable {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        showHealthInfoDialog = true
-                        onHealthBadgeClick()
-                    },
-                    shape = RoundedCornerShape(12.dp),
-                    color = statusColor.copy(alpha = 0.15f),
-                    border = BorderStroke(1.dp, statusColor.copy(alpha = 0.35f))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    // Segmented Switch Control (Month vs Overall)
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
                     ) {
-                        Surface(
-                            modifier = Modifier.size(7.dp),
-                            shape = CircleShape,
-                            color = statusColor
-                        ) {}
-                        Text(
-                            text = "${digest.healthStatus.label.uppercase()} • ${digest.healthScore}",
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                            fontWeight = FontWeight.ExtraBold,
-                            color = statusColor
-                        )
+                        Row(
+                            modifier = Modifier.padding(2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Month Segment Pill
+                            Surface(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable {
+                                        if (isOverallHistory) {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            isOverallHistory = false
+                                        }
+                                    },
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (!isOverallHistory) MaterialTheme.colorScheme.primary else Color.Transparent
+                            ) {
+                                Text(
+                                    text = digest.monthName.take(3),
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = if (!isOverallHistory) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
+
+                            // Overall Segment Pill
+                            Surface(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable {
+                                        if (!isOverallHistory) {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            isOverallHistory = true
+                                        }
+                                    },
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isOverallHistory) MaterialTheme.colorScheme.primary else Color.Transparent
+                            ) {
+                                Text(
+                                    text = "Overall",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = if (isOverallHistory) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Health Status Pill
+                    Surface(
+                        modifier = Modifier.clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            showHealthInfoDialog = true
+                            onHealthBadgeClick()
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        color = statusColor.copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, statusColor.copy(alpha = 0.35f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Surface(
+                                modifier = Modifier.size(7.dp),
+                                shape = CircleShape,
+                                color = statusColor
+                            ) {}
+                            Text(
+                                text = "${activeDigest.healthStatus.label.uppercase()} • ${activeDigest.healthScore}",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                fontWeight = FontWeight.ExtraBold,
+                                color = statusColor
+                            )
+                        }
                     }
                 }
             }
@@ -167,7 +313,7 @@ fun SmartFinanceDigestCard(
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
-                    text = digest.totalLiquidBalance.formatIndian(includeSymbol = true, includeDecimals = false),
+                    text = activeDigest.totalLiquidBalance.formatIndian(includeSymbol = true, includeDecimals = false),
                     style = MaterialTheme.typography.displaySmall.copy(
                         fontFamily = MonospaceFont,
                         fontWeight = FontWeight.Black
@@ -181,7 +327,7 @@ fun SmartFinanceDigestCard(
                 )
             }
 
-            // 3-Metric Snapshot Row (Spent This Month • Today's Burn • Safe Allowance)
+            // 3-Metric Snapshot Row (Spent • Today's Burn • Safe Allowance)
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -195,7 +341,7 @@ fun SmartFinanceDigestCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Spent This Month
+                    // Spent (Month / All-Time)
                     Column(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
@@ -206,14 +352,14 @@ fun SmartFinanceDigestCard(
                             .padding(horizontal = 6.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = "Spent (${digest.monthName.take(3)})",
+                            text = "Spent (${if (isOverallHistory) "All-Time" else activeDigest.monthName.take(3)})",
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = FontWeight.SemiBold
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = digest.totalSpentThisMonth.formatIndian(includeSymbol = true, includeDecimals = false),
+                            text = activeDigest.totalSpentThisMonth.formatIndian(includeSymbol = true, includeDecimals = false),
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontFamily = MonospaceFont,
                                 fontWeight = FontWeight.Bold
@@ -248,12 +394,12 @@ fun SmartFinanceDigestCard(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = digest.todayBurn.formatIndian(includeSymbol = true, includeDecimals = false),
+                            text = activeDigest.todayBurn.formatIndian(includeSymbol = true, includeDecimals = false),
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontFamily = MonospaceFont,
                                 fontWeight = FontWeight.Bold
                             ),
-                            color = if (digest.todayBurn > BigDecimal.ZERO) ExpenseRed else MaterialTheme.colorScheme.onSurface
+                            color = if (activeDigest.todayBurn > BigDecimal.ZERO) ExpenseRed else MaterialTheme.colorScheme.onSurface
                         )
                     }
 
@@ -285,12 +431,12 @@ fun SmartFinanceDigestCard(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "${digest.safeDailySpend.formatIndian(includeSymbol = true, includeDecimals = false)}/d",
+                            text = "${activeDigest.safeDailySpend.formatIndian(includeSymbol = true, includeDecimals = false)}/d",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontFamily = MonospaceFont,
                                 fontWeight = FontWeight.Bold
                             ),
-                            color = if (digest.isSpendingSlower) IncomeGreen else statusColor
+                            color = if (activeDigest.isSpendingSlower) IncomeGreen else statusColor
                         )
                     }
                 }
@@ -303,27 +449,27 @@ fun SmartFinanceDigestCard(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = "Day ${digest.currentDayOfMonth} of ${digest.totalDaysInMonth} (${digest.expectedTimeElapsedPercent}% month elapsed)",
+                        text = if (isOverallHistory) "All-Time Spending Performance" else "Day ${activeDigest.currentDayOfMonth} of ${activeDigest.totalDaysInMonth} (${activeDigest.expectedTimeElapsedPercent}% month elapsed)",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = "Budget Used: ${digest.budgetConsumedPercent}%",
+                        text = if (isOverallHistory) "Inflow: ${activeDigest.totalIncomeThisMonth.formatIndian(includeSymbol = true)}" else "Budget Used: ${activeDigest.budgetConsumedPercent}%",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = if (digest.isSpendingSlower) IncomeGreen else ExpenseRed
+                        color = if (activeDigest.isSpendingSlower) IncomeGreen else ExpenseRed
                     )
                 }
 
-                // Dual Progress Track (Month Timeline Elapsed vs Budget Consumed)
-                val timeRatio = (digest.expectedTimeElapsedPercent / 100f).coerceIn(0f, 1f)
-                val budgetRatio = (digest.budgetConsumedPercent / 100f).coerceIn(0f, 1f)
-                val activeColor = if (digest.isSpendingSlower) IncomeGreen else ExpenseRed
+                // Dual Progress Track
+                val timeRatio = (activeDigest.expectedTimeElapsedPercent / 100f).coerceIn(0f, 1f)
+                val budgetRatio = (activeDigest.budgetConsumedPercent / 100f).coerceIn(0f, 1f)
+                val activeColor = if (activeDigest.isSpendingSlower) IncomeGreen else ExpenseRed
                 val trackBg = MaterialTheme.colorScheme.surfaceVariant
                 val timelineTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
                 val markerColor = MaterialTheme.colorScheme.primary
 
-                androidx.compose.foundation.Canvas(
+                Canvas(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(10.dp)
@@ -338,14 +484,7 @@ fun SmartFinanceDigestCard(
                     val h = size.height
                     val cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2f, h / 2f)
 
-                    // 1. Base track background
-                    drawRoundRect(
-                        color = trackBg,
-                        size = size,
-                        cornerRadius = cornerRadius
-                    )
-
-                    // 2. Month Elapsed Track (shaded up to expectedTimeElapsedPercent)
+                    drawRoundRect(color = trackBg, size = size, cornerRadius = cornerRadius)
                     if (timeRatio > 0f) {
                         drawRoundRect(
                             color = timelineTrackColor,
@@ -353,19 +492,13 @@ fun SmartFinanceDigestCard(
                             cornerRadius = cornerRadius
                         )
                     }
-
-                    // 3. Budget Consumed Bar
                     if (budgetRatio > 0f) {
                         drawRoundRect(
-                            brush = Brush.horizontalGradient(
-                                listOf(activeColor, activeColor.copy(alpha = 0.85f))
-                            ),
+                            brush = Brush.horizontalGradient(listOf(activeColor, activeColor.copy(alpha = 0.85f))),
                             size = androidx.compose.ui.geometry.Size(w * budgetRatio, h),
                             cornerRadius = cornerRadius
                         )
                     }
-
-                    // 4. Timeline Marker Line / Tick at Month Elapsed position
                     if (timeRatio in 0.01f..0.99f) {
                         val markerX = w * timeRatio
                         drawLine(
@@ -376,39 +509,87 @@ fun SmartFinanceDigestCard(
                         )
                     }
                 }
+            }
 
-                // Dynamic Pacing Insight Pill
+            // NEW: Micro & Major Expenditure Analysis Bento Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Micro Spend Bento Card
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = if (digest.isSpendingSlower) IncomeGreen.copy(alpha = 0.1f) else ExpenseRed.copy(alpha = 0.1f),
-                    modifier = Modifier.clickable {
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        showHealthInfoDialog = true
-                        onHealthBadgeClick()
-                    }
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            showMicroDetailDialog = true
+                        },
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
+                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (digest.isSpendingSlower) Icons.AutoMirrored.Filled.TrendingDown else Icons.AutoMirrored.Filled.TrendingUp,
-                            contentDescription = null,
-                            tint = if (digest.isSpendingSlower) IncomeGreen else ExpenseRed,
-                            modifier = Modifier.size(16.dp)
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = "☕", fontSize = 14.sp)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "MICRO (<${microSummary.effectiveThreshold.formatIndian(includeSymbol = true, includeDecimals = false)})",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = microSummary.totalMicroSpend.formatIndian(includeSymbol = true, includeDecimals = false),
+                            style = MaterialTheme.typography.labelMedium.copy(fontFamily = MonospaceFont),
+                            fontWeight = FontWeight.Bold,
+                            color = ExpenseRed
                         )
                         Text(
-                            text = if (digest.isSpendingSlower) {
-                                "Spending ${kotlin.math.abs(digest.pacingDeltaPercent)}% slower than schedule (${digest.pacingBufferAmount.formatIndian(includeSymbol = true)} safe buffer)"
-                            } else {
-                                "Pacing is ${digest.pacingDeltaPercent}% ahead of month timeline. Recommended to taper non-essentials."
-                            },
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                            color = if (digest.isSpendingSlower) IncomeGreen else ExpenseRed,
-                            fontWeight = FontWeight.Medium
+                            text = "${microSummary.microSpendPercentage}% share (${microSummary.microTxCount} txs)",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // Major Spend Bento Card
+                Surface(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            showMajorDetailDialog = true
+                        },
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
+                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = "🐘", fontSize = 14.sp)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "MAJOR (>${microSummary.effectiveThreshold.formatIndian(includeSymbol = true, includeDecimals = false)})",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = microSummary.totalMacroSpend.formatIndian(includeSymbol = true, includeDecimals = false),
+                            style = MaterialTheme.typography.labelMedium.copy(fontFamily = MonospaceFont),
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "${100 - microSummary.microSpendPercentage}% share (${microSummary.macroTxCount} txs)",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -426,6 +607,7 @@ fun SmartFinanceDigestCard(
                         .clip(RoundedCornerShape(14.dp))
                         .clickable {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            showMicroDetailDialog = true
                             onLeakRadarClick()
                         },
                     shape = RoundedCornerShape(14.dp),
@@ -434,7 +616,7 @@ fun SmartFinanceDigestCard(
                 ) {
                     Column(modifier = Modifier.padding(10.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = digest.leakAlert?.categoryIcon ?: "🔍", fontSize = 14.sp)
+                            Text(text = activeDigest.leakAlert?.categoryIcon ?: "🔍", fontSize = 14.sp)
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = "LEAK RADAR",
@@ -445,14 +627,14 @@ fun SmartFinanceDigestCard(
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = digest.leakAlert?.categoryName ?: "No Leaks",
+                            text = activeDigest.leakAlert?.categoryName ?: "No Leaks",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = if (digest.leakAlert != null) {
-                                "${digest.leakAlert.spentThisWeek.formatIndian(includeSymbol = true)} (${digest.leakAlert.microTransactionCount} txs)"
+                            text = if (activeDigest.leakAlert != null) {
+                                "${activeDigest.leakAlert.spentThisWeek.formatIndian(includeSymbol = true)} (${activeDigest.leakAlert.microTransactionCount} txs)"
                             } else {
                                 "Well controlled"
                             },
@@ -493,14 +675,14 @@ fun SmartFinanceDigestCard(
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = if (digest.upcomingSubscriptionsCount > 0) "${digest.upcomingSubscriptionsCount} Bills Due" else "No Bills Due",
+                            text = if (activeDigest.upcomingSubscriptionsCount > 0) "${activeDigest.upcomingSubscriptionsCount} Bills Due" else "No Bills Due",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = if (digest.upcomingSubscriptionsCount > 0) {
-                                digest.upcomingSubscriptionsAmount.formatIndian(includeSymbol = true)
+                            text = if (activeDigest.upcomingSubscriptionsCount > 0) {
+                                activeDigest.upcomingSubscriptionsAmount.formatIndian(includeSymbol = true)
                             } else {
                                 "Zero recurring"
                             },
@@ -512,7 +694,7 @@ fun SmartFinanceDigestCard(
             }
 
             // Beat 4: Tactical Action Step
-            if (digest.tacticalAction != null) {
+            if (activeDigest.tacticalAction != null) {
                 Surface(
                     shape = RoundedCornerShape(14.dp),
                     color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
@@ -523,7 +705,7 @@ fun SmartFinanceDigestCard(
                             .fillMaxWidth()
                             .clickable {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                onTacticalActionClick(digest.tacticalAction.actionType)
+                                onTacticalActionClick(activeDigest.tacticalAction.actionType)
                             }
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -531,13 +713,13 @@ fun SmartFinanceDigestCard(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = digest.tacticalAction.title,
+                                text = activeDigest.tacticalAction.title,
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = digest.tacticalAction.description,
+                                text = activeDigest.tacticalAction.description,
                                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -549,7 +731,7 @@ fun SmartFinanceDigestCard(
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = digest.tacticalAction.buttonText,
+                                contentDescription = activeDigest.tacticalAction.buttonText,
                                 tint = MaterialTheme.colorScheme.onPrimary,
                                 modifier = Modifier
                                     .padding(6.dp)
@@ -561,6 +743,314 @@ fun SmartFinanceDigestCard(
             }
         }
     }
+}
+
+@Composable
+fun MicroExpenditureDetailDialog(
+    allTransactions: List<Transaction>,
+    allCategories: List<Category>,
+    safeDailySpend: BigDecimal,
+    onEditThresholdClick: () -> Unit,
+    onViewAllClick: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var isOverallHistory by remember { mutableStateOf(false) }
+    val currentCal = Calendar.getInstance()
+    val currentMonth = currentCal.get(Calendar.MONTH) + 1
+    val currentYear = currentCal.get(Calendar.YEAR)
+
+    val targetTxs = remember(allTransactions, isOverallHistory) {
+        if (isOverallHistory) allTransactions else allTransactions.filter { tx ->
+            val c = Calendar.getInstance().apply { timeInMillis = tx.timestamp }
+            c.get(Calendar.MONTH) + 1 == currentMonth && c.get(Calendar.YEAR) == currentYear
+        }
+    }
+
+    val summary = remember(targetTxs, allCategories, safeDailySpend) {
+        MicroSpendAnalyzer.analyze(
+            transactions = targetTxs,
+            categories = allCategories,
+            safeDailyAllowance = safeDailySpend
+        )
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("☕", fontSize = 18.sp)
+                    Text("Small Expenditures", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                }
+                
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.clip(RoundedCornerShape(20.dp)).clickable { isOverallHistory = !isOverallHistory }
+                ) {
+                    Text(
+                        text = if (isOverallHistory) "All-Time" else "This Month",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("MICRO THRESHOLD LIMIT", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Text("<${summary.effectiveThreshold.formatIndian(includeSymbol = true, includeDecimals = false)} per purchase", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        }
+                        TextButton(onClick = onEditThresholdClick) {
+                            Text("Edit Baseline", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Total Small Spend", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        "${summary.totalMicroSpend.formatIndian(includeSymbol = true)} (${summary.microSpendPercentage}%)",
+                        style = MaterialTheme.typography.titleSmall.copy(fontFamily = MonospaceFont),
+                        fontWeight = FontWeight.Bold,
+                        color = ExpenseRed
+                    )
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                Text("TOP 3 SMALL TRANSACTIONS", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+                if (summary.microTransactions.isEmpty()) {
+                    Text("No small transactions recorded.", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    summary.microTransactions.take(3).forEach { tx ->
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Column {
+                                Text(tx.merchant, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                Text(SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault()).format(java.util.Date(tx.timestamp)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Text(tx.amount.formatIndian(includeSymbol = true), style = MaterialTheme.typography.bodySmall.copy(fontFamily = MonospaceFont), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                Text("ENTIRE CATEGORY BREAKDOWN", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    summary.topMicroCategories.forEach { cat ->
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("${cat.categoryIcon} ${cat.categoryName} (${cat.txCount})", style = MaterialTheme.typography.bodySmall)
+                            Text(cat.microTotal.formatIndian(includeSymbol = true), style = MaterialTheme.typography.bodySmall.copy(fontFamily = MonospaceFont), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onViewAllClick(); onDismiss() }, shape = RoundedCornerShape(10.dp)) {
+                Text("View All Transactions", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        }
+    )
+}
+
+@Composable
+fun MajorExpenditureDetailDialog(
+    allTransactions: List<Transaction>,
+    allCategories: List<Category>,
+    safeDailySpend: BigDecimal,
+    onViewAllClick: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var isOverallHistory by remember { mutableStateOf(false) }
+    val currentCal = Calendar.getInstance()
+    val currentMonth = currentCal.get(Calendar.MONTH) + 1
+    val currentYear = currentCal.get(Calendar.YEAR)
+
+    val targetTxs = remember(allTransactions, isOverallHistory) {
+        if (isOverallHistory) allTransactions else allTransactions.filter { tx ->
+            val c = Calendar.getInstance().apply { timeInMillis = tx.timestamp }
+            c.get(Calendar.MONTH) + 1 == currentMonth && c.get(Calendar.YEAR) == currentYear
+        }
+    }
+
+    val summary = remember(targetTxs, allCategories, safeDailySpend) {
+        MicroSpendAnalyzer.analyze(
+            transactions = targetTxs,
+            categories = allCategories,
+            safeDailyAllowance = safeDailySpend
+        )
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("🐘", fontSize = 18.sp)
+                    Text("Major Expenditures", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                }
+                
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.clip(RoundedCornerShape(20.dp)).clickable { isOverallHistory = !isOverallHistory }
+                ) {
+                    Text(
+                        text = if (isOverallHistory) "All-Time" else "This Month",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Total Major Outflow", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        "${summary.totalMacroSpend.formatIndian(includeSymbol = true)} (${100 - summary.microSpendPercentage}%)",
+                        style = MaterialTheme.typography.titleSmall.copy(fontFamily = MonospaceFont),
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                Text("TOP 3 MAJOR TRANSACTIONS", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+                if (summary.macroTransactions.isEmpty()) {
+                    Text("No major transactions recorded above threshold.", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    summary.macroTransactions.take(3).forEach { tx ->
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Column {
+                                Text(tx.merchant, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                Text(SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault()).format(java.util.Date(tx.timestamp)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Text(tx.amount.formatIndian(includeSymbol = true), style = MaterialTheme.typography.bodySmall.copy(fontFamily = MonospaceFont), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                Text("ENTIRE MAJOR CATEGORY BREAKDOWN", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    summary.allMacroCategories.forEach { cat ->
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("${cat.categoryIcon} ${cat.categoryName} (${cat.txCount})", style = MaterialTheme.typography.bodySmall)
+                            Text(cat.microTotal.formatIndian(includeSymbol = true), style = MaterialTheme.typography.bodySmall.copy(fontFamily = MonospaceFont), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onViewAllClick(); onDismiss() }, shape = RoundedCornerShape(10.dp)) {
+                Text("View All Transactions", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        }
+    )
+}
+
+@Composable
+fun BaselineThresholdEditorDialog(
+    currentBaseline: BigDecimal,
+    onSaveThreshold: (BigDecimal?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var inputText by remember { mutableStateOf(currentBaseline.stripTrailingZeros().toPlainString()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Default.Tune, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Text("Edit Baseline Micro Threshold", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "Purchases under this amount are automatically categorized as Micro expenditures. Dynamic default is Safe Daily Allowance / 2.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                OutlinedTextField(
+                    value = inputText,
+                    onValueChange = { inputText = it },
+                    label = { Text("Custom Threshold Limit (₹)") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(150, 250, 500, 1000).forEach { preset ->
+                        FilterChip(
+                            selected = inputText == preset.toString(),
+                            onClick = { inputText = preset.toString() },
+                            label = { Text(preset.formatIndian(includeSymbol = true)) },
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val parsed = inputText.toBigDecimalOrNull()
+                    onSaveThreshold(parsed)
+                    onDismiss()
+                },
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Text("Save Override", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = { onSaveThreshold(null); onDismiss() }) {
+                Text("Reset to Auto")
+            }
+        }
+    )
 }
 
 @Composable
@@ -606,14 +1096,13 @@ fun EditSafeAllowanceDialog(
                     value = inputAmountText,
                     onValueChange = { inputAmountText = it },
                     label = { Text("Monthly Target Budget (₹)") },
-                    placeholder = { Text("e.g. 25000") },
+                    placeholder = { Text("e.g. 25,000") },
                     keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // Quick Preset Chips
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -622,13 +1111,12 @@ fun EditSafeAllowanceDialog(
                         FilterChip(
                             selected = inputAmountText == preset.toString(),
                             onClick = { inputAmountText = preset.toString() },
-                            label = { Text("₹${preset.formatIndian()}") },
+                            label = { Text(preset.formatIndian(includeSymbol = true)) },
                             shape = RoundedCornerShape(10.dp)
                         )
                     }
                 }
 
-                // Live Preview Card
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),

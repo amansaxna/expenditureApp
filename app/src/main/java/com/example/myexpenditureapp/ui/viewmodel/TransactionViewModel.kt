@@ -19,6 +19,10 @@ sealed class UiEvent {
     object Success : UiEvent()
 }
 
+enum class SpendTypeFilter {
+    ALL, MICRO, MAJOR
+}
+
 data class TransactionUiState(
     val transactions: List<Transaction> = emptyList(),
     val accounts: List<Account> = emptyList(),
@@ -26,12 +30,23 @@ data class TransactionUiState(
     val searchQuery: String = "",
     val filterAccountId: Long? = null,
     val filterCategoryId: Long? = null,
+    val filterSpendType: SpendTypeFilter = SpendTypeFilter.ALL,
+    val customThresholdOverride: BigDecimal? = null,
+    val effectiveThreshold: BigDecimal = BigDecimal("250"),
     val selectedMonth: Int = Calendar.getInstance().get(Calendar.MONTH),
     val selectedYear: Int = Calendar.getInstance().get(Calendar.YEAR),
     val isLoading: Boolean = false,
     val totalIncome: BigDecimal = BigDecimal.ZERO,
     val totalExpense: BigDecimal = BigDecimal.ZERO,
     val netBalance: BigDecimal = BigDecimal.ZERO
+)
+
+private data class FilterParams(
+    val query: String,
+    val accId: Long?,
+    val catId: Long?,
+    val spendType: SpendTypeFilter,
+    val customThreshold: BigDecimal?
 )
 
 class TransactionViewModel(application: Application) : AndroidViewModel(application) {
@@ -43,6 +58,8 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
     private val _searchQuery = MutableStateFlow("")
     private val _filterAccountId = MutableStateFlow<Long?>(null)
     private val _filterCategoryId = MutableStateFlow<Long?>(null)
+    private val _filterSpendType = MutableStateFlow(SpendTypeFilter.ALL)
+    private val _customThresholdOverride = MutableStateFlow<BigDecimal?>(null)
     private val _selectedMonth = MutableStateFlow(Calendar.getInstance().get(Calendar.MONTH))
     private val _selectedYear = MutableStateFlow(Calendar.getInstance().get(Calendar.YEAR))
 
@@ -58,12 +75,14 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<TransactionUiState> = combine(
-        combine(_searchQuery, _filterAccountId, _filterCategoryId) { q, a, c -> Triple(q, a, c) },
+        combine(_searchQuery, _filterAccountId, _filterCategoryId, _filterSpendType, _customThresholdOverride) { q, a, c, st, thresh ->
+            FilterParams(q, a, c, st, thresh)
+        },
         combine(_selectedMonth, _selectedYear) { m, y -> m to y },
         getAccountsUseCase(),
         getCategoriesUseCase.getAll()
     ) { params, dateParams, accounts, categories ->
-        val (query, accId, catId) = params
+        val (query, accId, catId, spendType, customThreshold) = params
         val (month, year) = dateParams
         
         val cal = Calendar.getInstance()
@@ -84,16 +103,33 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
             query = if (query.isEmpty()) null else query,
             startDate = startDate,
             endDate = endDate
-        ).map { transactions ->
-            val income = transactions.filter { it.type == "Income" }.fold(BigDecimal.ZERO) { acc, t -> acc.add(t.amount) }
-            val expense = transactions.filter { it.type == "Expense" }.fold(BigDecimal.ZERO) { acc, t -> acc.add(t.amount) }
+        ).map { rawTransactions ->
+            val effectiveThreshold = customThreshold ?: BigDecimal("250")
+            val filteredTransactions = rawTransactions.filter { tx ->
+                val isMicro = when (tx.isMicroOverride) {
+                    true -> true
+                    false -> false
+                    null -> tx.amount <= effectiveThreshold
+                }
+                when (spendType) {
+                    SpendTypeFilter.ALL -> true
+                    SpendTypeFilter.MICRO -> isMicro
+                    SpendTypeFilter.MAJOR -> !isMicro
+                }
+            }
+
+            val income = filteredTransactions.filter { it.type == "Income" }.fold(BigDecimal.ZERO) { acc, t -> acc.add(t.amount) }
+            val expense = filteredTransactions.filter { it.type == "Expense" }.fold(BigDecimal.ZERO) { acc, t -> acc.add(t.amount) }
             TransactionUiState(
-                transactions = transactions,
+                transactions = filteredTransactions,
                 accounts = accounts,
                 categories = categories,
                 searchQuery = query,
                 filterAccountId = accId,
                 filterCategoryId = catId,
+                filterSpendType = spendType,
+                customThresholdOverride = customThreshold,
+                effectiveThreshold = effectiveThreshold,
                 selectedMonth = month,
                 selectedYear = year,
                 totalIncome = income,
@@ -118,6 +154,14 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
 
     fun onFilterCategoryChange(categoryId: Long?) {
         _filterCategoryId.value = categoryId
+    }
+
+    fun onFilterSpendTypeChange(spendType: SpendTypeFilter) {
+        _filterSpendType.value = spendType
+    }
+
+    fun onCustomThresholdChange(threshold: BigDecimal?) {
+        _customThresholdOverride.value = threshold
     }
 
     fun onMonthYearChange(month: Int, year: Int) {

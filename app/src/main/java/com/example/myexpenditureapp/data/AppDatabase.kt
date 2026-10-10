@@ -37,6 +37,12 @@ val MIGRATION_7_8 = object : Migration(7, 8) {
     }
 }
 
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `transactions` ADD COLUMN `isMicroOverride` INTEGER DEFAULT NULL")
+    }
+}
+
 @Database(
     entities = [
         Account::class,
@@ -47,7 +53,7 @@ val MIGRATION_7_8 = object : Migration(7, 8) {
         SavingGoal::class,
         Subscription::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -71,7 +77,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "expenditure_database"
                 )
-                    .addMigrations(MIGRATION_7_8)
+                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9)
                     .fallbackToDestructiveMigration(dropAllTables = false)
                     .build()
                 INSTANCE = instance
