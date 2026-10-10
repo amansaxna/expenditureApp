@@ -73,12 +73,19 @@ class AnalyticsViewModel : ViewModel() {
     }
 
     val filteredTransactions = combine(transactions, _filterState) { txs, filters ->
-        val calendar = Calendar.getInstance()
-        calendar.set(filters.year, filters.month - 1, 1, 0, 0, 0)
-        calendar.set(Calendar.MILLISECOND, 0)
-        val monthStart = calendar.timeInMillis
-        calendar.set(filters.year, filters.month - 1, calendar.getActualMaximum(Calendar.DAY_OF_MONTH), 23, 59, 59)
-        val monthEnd = calendar.timeInMillis
+        val monthStart: Long
+        val monthEnd: Long
+        if (filters.month > 0) {
+            val calendar = Calendar.getInstance()
+            calendar.set(filters.year, filters.month - 1, 1, 0, 0, 0)
+            calendar.set(Calendar.MILLISECOND, 0)
+            monthStart = calendar.timeInMillis
+            calendar.set(filters.year, filters.month - 1, calendar.getActualMaximum(Calendar.DAY_OF_MONTH), 23, 59, 59)
+            monthEnd = calendar.timeInMillis
+        } else {
+            monthStart = 0L
+            monthEnd = Long.MAX_VALUE
+        }
 
         txs.filter { tx ->
             val accountMatch = filters.selectedAccountId == null || tx.accountId == filters.selectedAccountId
@@ -286,54 +293,74 @@ class AnalyticsViewModel : ViewModel() {
         val month = filters.month
         val year = filters.year
         
-        val calendar = Calendar.getInstance()
-        calendar.set(year, month - 1, 1, 0, 0, 0)
-        calendar.set(Calendar.MILLISECOND, 0)
-        val startOfMonth = calendar.timeInMillis
-        calendar.set(year, month - 1, calendar.getActualMaximum(Calendar.DAY_OF_MONTH), 23, 59, 59)
-        val endOfMonth = calendar.timeInMillis
-        
-        val currentMonthTxs = if (month == 0) txs else txs.filter { it.timestamp in startOfMonth..endOfMonth }
-        val currentSpent = currentMonthTxs.filter { it.type == "Expense" }.fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) }
-        val currentIncome = currentMonthTxs.filter { it.type == "Income" }.fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) }
-        val currentSavings = currentIncome.subtract(currentSpent)
-        
-        val currentBudgets = if (month == 0) buds else buds.filter { it.month == month && it.year == year }
-        val totalBudgeted = currentBudgets.fold(BigDecimal.ZERO) { acc, b -> acc.add(b.limitAmount) }
-        
-        // Previous month savings
-        calendar.set(year, month - 1, 1)
-        calendar.add(Calendar.MONTH, -1)
-        val prevMonth = calendar.get(Calendar.MONTH) + 1
-        val prevYear = calendar.get(Calendar.YEAR)
-        calendar.set(prevYear, prevMonth - 1, 1, 0, 0, 0)
-        val startOfPrevMonth = calendar.timeInMillis
-        calendar.set(prevYear, prevMonth - 1, calendar.getActualMaximum(Calendar.DAY_OF_MONTH), 23, 59, 59)
-        val endOfPrevMonth = calendar.timeInMillis
-        
-        val prevMonthTxs = txs.filter { it.timestamp in startOfPrevMonth..endOfPrevMonth }
-        val prevSpent = prevMonthTxs.filter { it.type == "Expense" }.fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) }
-        val prevIncome = prevMonthTxs.filter { it.type == "Income" }.fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) }
-        val prevSavings = prevIncome.subtract(prevSpent)
-        
-        val savingsChange = if (prevSavings != BigDecimal.ZERO) {
-            currentSavings.subtract(prevSavings).divide(prevSavings.abs().coerceAtLeast(BigDecimal.ONE), 4, RoundingMode.HALF_UP).multiply(BigDecimal(100))
-        } else BigDecimal.ZERO
-        
-        val grade = when {
-            totalBudgeted == BigDecimal.ZERO -> "No Budgets"
-            currentSpent > totalBudgeted -> "Overspent"
-            currentSpent > totalBudgeted.multiply(BigDecimal(0.9)) -> "Near Limit"
-            else -> "On Track"
+        if (month == 0) {
+            val currentSpent = txs.filter { it.type == "Expense" }.fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) }
+            val currentIncome = txs.filter { it.type == "Income" }.fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) }
+            val currentSavings = currentIncome.subtract(currentSpent)
+            val totalBudgeted = buds.fold(BigDecimal.ZERO) { acc, b -> acc.add(b.limitAmount) }
+            val grade = when {
+                totalBudgeted == BigDecimal.ZERO -> "No Budgets"
+                currentSpent > totalBudgeted -> "Overspent"
+                currentSpent > totalBudgeted.multiply(BigDecimal(0.9)) -> "Near Limit"
+                else -> "On Track"
+            }
+            MonthlyPerformance(
+                totalBudgeted = totalBudgeted,
+                totalSpent = currentSpent,
+                savingsChange = BigDecimal.ZERO,
+                grade = grade,
+                netSavings = currentSavings
+            )
+        } else {
+            val calendar = Calendar.getInstance()
+            calendar.set(year, month - 1, 1, 0, 0, 0)
+            calendar.set(Calendar.MILLISECOND, 0)
+            val startOfMonth = calendar.timeInMillis
+            calendar.set(year, month - 1, calendar.getActualMaximum(Calendar.DAY_OF_MONTH), 23, 59, 59)
+            val endOfMonth = calendar.timeInMillis
+            
+            val currentMonthTxs = txs.filter { it.timestamp in startOfMonth..endOfMonth }
+            val currentSpent = currentMonthTxs.filter { it.type == "Expense" }.fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) }
+            val currentIncome = currentMonthTxs.filter { it.type == "Income" }.fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) }
+            val currentSavings = currentIncome.subtract(currentSpent)
+            
+            val currentBudgets = buds.filter { it.month == month && it.year == year }
+            val totalBudgeted = currentBudgets.fold(BigDecimal.ZERO) { acc, b -> acc.add(b.limitAmount) }
+            
+            // Previous month savings
+            calendar.set(year, month - 1, 1)
+            calendar.add(Calendar.MONTH, -1)
+            val prevMonth = calendar.get(Calendar.MONTH) + 1
+            val prevYear = calendar.get(Calendar.YEAR)
+            calendar.set(prevYear, prevMonth - 1, 1, 0, 0, 0)
+            val startOfPrevMonth = calendar.timeInMillis
+            calendar.set(prevYear, prevMonth - 1, calendar.getActualMaximum(Calendar.DAY_OF_MONTH), 23, 59, 59)
+            val endOfPrevMonth = calendar.timeInMillis
+            
+            val prevMonthTxs = txs.filter { it.timestamp in startOfPrevMonth..endOfPrevMonth }
+            val prevSpent = prevMonthTxs.filter { it.type == "Expense" }.fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) }
+            val prevIncome = prevMonthTxs.filter { it.type == "Income" }.fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) }
+            val prevSavings = prevIncome.subtract(prevSpent)
+            
+            val savingsChange = if (prevSavings != BigDecimal.ZERO) {
+                currentSavings.subtract(prevSavings).divide(prevSavings.abs().coerceAtLeast(BigDecimal.ONE), 4, RoundingMode.HALF_UP).multiply(BigDecimal(100))
+            } else BigDecimal.ZERO
+            
+            val grade = when {
+                totalBudgeted == BigDecimal.ZERO -> "No Budgets"
+                currentSpent > totalBudgeted -> "Overspent"
+                currentSpent > totalBudgeted.multiply(BigDecimal(0.9)) -> "Near Limit"
+                else -> "On Track"
+            }
+            
+            MonthlyPerformance(
+                totalBudgeted = totalBudgeted,
+                totalSpent = currentSpent,
+                savingsChange = savingsChange,
+                grade = grade,
+                netSavings = currentSavings
+            )
         }
-        
-        MonthlyPerformance(
-            totalBudgeted = totalBudgeted,
-            totalSpent = currentSpent,
-            savingsChange = savingsChange,
-            grade = grade,
-            netSavings = currentSavings
-        )
     }
 
     data class MonthlyPerformance(
@@ -416,15 +443,25 @@ class AnalyticsViewModel : ViewModel() {
             .maxByOrNull { it.value }
             ?.let { cats.find { c -> c.id == it.key }?.name ?: "Other" } ?: "N/A"
             
-        val currentBudgets = buds.filter { it.month == month && it.year == year }
-        val budgetLimit = currentBudgets.fold(BigDecimal.ZERO) { acc, b -> acc.add(b.limitAmount) }.coerceAtLeast(BigDecimal.ONE)
-        val budgetUsed = totalExpenses.divide(budgetLimit, 4, RoundingMode.HALF_UP).multiply(BigDecimal(100))
+        val currentBudgets = if (month == 0) buds else buds.filter { it.month == month && it.year == year }
+        val budgetLimit = currentBudgets.fold(BigDecimal.ZERO) { acc, b -> acc.add(b.limitAmount) }
+        
+        val spendLabel = if (month == 0) "Overall Spend" else "Monthly Spend"
+        val budgetSub = if (budgetLimit > BigDecimal.ZERO) {
+            val pct = totalExpenses.divide(budgetLimit, 4, RoundingMode.HALF_UP).multiply(BigDecimal(100))
+            "Budget: ${pct.setScale(0, RoundingMode.HALF_UP)}%"
+        } else {
+            if (month == 0) "All-Time" else "No Budget Set"
+        }
+
+        val projVal = if (month == 0) totalExpenses.formatIndian() else projection.formatIndian()
+        val projSub = if (month == 0) "All-Time Total" else "End of month"
 
         listOf(
             KPI("Net Flow", netCashFlow.formatIndian(), "Income - Exp"),
             KPI("Top Category", highestCategory, "Most spent"),
-            KPI("Monthly Spend", totalExpenses.formatIndian(), "Budget: ${budgetUsed.setScale(0, RoundingMode.HALF_UP)}%"),
-            KPI("Projected", projection.formatIndian(), "End of month")
+            KPI(spendLabel, totalExpenses.formatIndian(), budgetSub),
+            KPI("Projected", projVal, projSub)
         )
     }
 

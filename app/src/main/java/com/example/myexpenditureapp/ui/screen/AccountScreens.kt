@@ -81,6 +81,7 @@ fun AccountListScreen(
 ) {
     val accounts by accountViewModel.accounts.collectAsStateWithLifecycle()
     val unreviewedTransactions by transactionViewModel.unreviewedTransactions.collectAsStateWithLifecycle()
+    val allTransactions by transactionViewModel.allTransactions.collectAsStateWithLifecycle(initialValue = emptyList())
     val budgetsWithProgress by budgetViewModel.budgetsWithProgress.collectAsStateWithLifecycle()
     val txUiState by transactionViewModel.uiState.collectAsStateWithLifecycle()
     val categories by budgetViewModel.allCategories.collectAsStateWithLifecycle()
@@ -262,7 +263,7 @@ fun AccountListScreen(
             item {
                 com.example.myexpenditureapp.ui.component.SmartFinanceDigestCard(
                     digest = smartDigest,
-                    allTransactions = txUiState.transactions,
+                    allTransactions = allTransactions,
                     allCategories = categories,
                     onTotalBalanceClick = onOpenAccounts,
                     onSpentMonthClick = onOpenTransactions,

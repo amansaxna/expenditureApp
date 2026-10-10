@@ -118,4 +118,55 @@ class DigestCalculatorTest {
         assertEquals(2, digest.upcomingSubscriptionsCount)
         assertEquals(BigDecimal("768"), digest.upcomingSubscriptionsAmount)
     }
+
+    @Test
+    fun testOverallHistoryCalculatesAcrossAllMonths() {
+        val calCurrent = Calendar.getInstance()
+        calCurrent.set(2026, Calendar.OCTOBER, 10, 12, 0, 0)
+        val currentMonthTimestamp = calCurrent.timeInMillis
+
+        val calPrev = Calendar.getInstance()
+        calPrev.set(2026, Calendar.SEPTEMBER, 15, 12, 0, 0)
+        val prevMonthTimestamp = calPrev.timeInMillis
+
+        val txCurrent = Transaction(
+            id = 1L, accountId = 1L, categoryId = 1L,
+            amount = BigDecimal("5000"), merchant = "October Spend", type = "Expense",
+            timestamp = currentMonthTimestamp
+        )
+
+        val txPrev = Transaction(
+            id = 2L, accountId = 1L, categoryId = 1L,
+            amount = BigDecimal("10000"), merchant = "September Spend", type = "Expense",
+            timestamp = prevMonthTimestamp
+        )
+
+        val transactions = listOf(txCurrent, txPrev)
+
+        // Monthly mode (isOverallHistory = false): only October (5,000) counted
+        val monthDigest = DigestCalculator.calculateDigest(
+            transactions = transactions,
+            categories = emptyList(),
+            budgets = emptyList(),
+            subscriptions = emptyList(),
+            savingGoals = emptyList(),
+            nowTimestamp = currentMonthTimestamp,
+            isOverallHistory = false
+        )
+        assertEquals(BigDecimal("5000"), monthDigest.totalSpentThisMonth)
+
+        // Overall mode (isOverallHistory = true): September + October (15,000) counted
+        val overallDigest = DigestCalculator.calculateDigest(
+            transactions = transactions,
+            categories = emptyList(),
+            budgets = emptyList(),
+            subscriptions = emptyList(),
+            savingGoals = emptyList(),
+            nowTimestamp = currentMonthTimestamp,
+            isOverallHistory = true
+        )
+        assertEquals(BigDecimal("15000"), overallDigest.totalSpentThisMonth)
+        assertEquals("All-Time", overallDigest.monthName)
+    }
 }
+

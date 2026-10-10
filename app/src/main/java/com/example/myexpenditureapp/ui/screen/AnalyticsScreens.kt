@@ -862,14 +862,18 @@ fun SimpleCalendarView(
     val selectedYear = filterState.year
     
     val dailyTotals = transactions.filter {
-        calendar.timeInMillis = it.timestamp
-        calendar.get(Calendar.MONTH) + 1 == selectedMonth && calendar.get(Calendar.YEAR) == selectedYear
+        if (selectedMonth == 0) {
+            true
+        } else {
+            calendar.timeInMillis = it.timestamp
+            calendar.get(Calendar.MONTH) + 1 == selectedMonth && calendar.get(Calendar.YEAR) == selectedYear
+        }
     }.groupBy {
         calendar.timeInMillis = it.timestamp
         calendar.get(Calendar.DAY_OF_MONTH)
     }.mapValues { it.value.fold(java.math.BigDecimal.ZERO) { acc, tx -> if (tx.type == "Expense") acc.add(tx.amount) else acc } }
 
-    val daysInMonth = Calendar.getInstance().apply {
+    val daysInMonth = if (selectedMonth == 0) 31 else Calendar.getInstance().apply {
         set(Calendar.YEAR, selectedYear)
         set(Calendar.MONTH, selectedMonth - 1)
     }.getActualMaximum(Calendar.DAY_OF_MONTH)

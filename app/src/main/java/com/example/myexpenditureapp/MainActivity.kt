@@ -127,6 +127,11 @@ class MainActivity : ComponentActivity() {
             ?: if (intent.action == "com.example.myexpenditureapp.QUICK_ADD") "quick_add" else null
         pendingShortcutAction.value = action
     }
+
+    override fun onResume() {
+        super.onResume()
+        com.example.myexpenditureapp.notifications.LiveStatusNotificationManager.refresh(this)
+    }
 }
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)

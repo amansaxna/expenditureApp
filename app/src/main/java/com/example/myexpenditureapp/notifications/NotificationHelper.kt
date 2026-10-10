@@ -53,6 +53,7 @@ object NotificationHelper {
             ).apply {
                 description = "Persistent ambient view of daily and monthly expenditure with quick shortcuts"
                 setShowBadge(false)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
             }
 
             val reviewChannel = NotificationChannel(
@@ -452,17 +453,46 @@ object NotificationHelper {
             .bigText(bigText)
             .setSummaryText("Live Status")
 
+        val isOverBudget = budgetExists && monthlySpent > monthlyBudget
+        val isNearLimit = budgetExists && budgetPercent >= 80
+
+        val publicTitle = when {
+            isOverBudget -> "⚠️ MyExpenditure • Over Target Budget"
+            isNearLimit -> "⚡ MyExpenditure • Near Limit ($budgetPercent% Used)"
+            else -> "🟢 MyExpenditure • Spend Pace Active"
+        }
+
+        val publicText = when {
+            isOverBudget -> "Monthly target budget limit exceeded • Unlock to view details"
+            isNearLimit -> "Approaching monthly target limit • Unlock to view details"
+            else -> "Daily safe pace active • Unlock to view live metrics"
+        }
+
+        // Generic Public Version for Lock Screen & Always-On Display Privacy Protection
+        val publicNotification = NotificationCompat.Builder(context, CHANNEL_LIVE_STATUS)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(publicTitle)
+            .setContentText(publicText)
+            .setOngoing(true)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setColor(if (isOverBudget) 0xFFF43F5E.toInt() else if (isNearLimit) 0xFFF59E0B.toInt() else 0xFF6366F1.toInt())
+            .build()
+
         val builder = NotificationCompat.Builder(context, CHANNEL_LIVE_STATUS)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(contentTitle)
             .setContentText(contentText)
             .setStyle(bigTextStyle)
             .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(publicNotification)
             .setContentIntent(openAppPendingIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setAutoCancel(false)
-            .setColor(0xFF6366F1.toInt())
+            .setColor(if (isOverBudget) 0xFFF43F5E.toInt() else 0xFF6366F1.toInt())
             .addAction(R.drawable.ic_launcher_foreground, "➕ Add", quickAddPendingIntent)
             .addAction(R.drawable.ic_launcher_foreground, "📊 Stats", analyticsPendingIntent)
             .addAction(R.drawable.ic_launcher_foreground, "📥 Inbox", inboxPendingIntent)
