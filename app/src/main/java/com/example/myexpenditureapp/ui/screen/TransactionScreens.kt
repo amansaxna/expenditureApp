@@ -1167,8 +1167,7 @@ fun TransactionEditScreen(
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 },
                             shape = RoundedCornerShape(10.dp),
-                            color = if (isSelected) activeColor.copy(alpha = 0.18f) else Color.Transparent,
-                            border = if (isSelected) BorderStroke(1.5.dp, activeColor) else null,
+                            color = if (isSelected) activeColor else Color.Transparent,
                             shadowElevation = if (isSelected) 1.dp else 0.dp
                         ) {
                             Row(
@@ -1180,14 +1179,14 @@ fun TransactionEditScreen(
                                     imageVector = icon,
                                     contentDescription = null,
                                     modifier = Modifier.size(15.dp),
-                                    tint = if (isSelected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    tint = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                                 )
                                 Spacer(Modifier.width(6.dp))
                                 Text(
                                     text = t,
                                     style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
-                                    color = if (isSelected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -1789,8 +1788,7 @@ fun TransactionReviewScreen(
                                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 },
                             shape = RoundedCornerShape(10.dp),
-                            color = if (isSelected) activeColor.copy(alpha = 0.18f) else Color.Transparent,
-                            border = if (isSelected) BorderStroke(1.5.dp, activeColor) else null,
+                            color = if (isSelected) activeColor else Color.Transparent,
                             shadowElevation = if (isSelected) 1.dp else 0.dp
                         ) {
                             Row(
@@ -1802,14 +1800,14 @@ fun TransactionReviewScreen(
                                     imageVector = icon,
                                     contentDescription = null,
                                     modifier = Modifier.size(15.dp),
-                                    tint = if (isSelected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    tint = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                                 )
                                 Spacer(Modifier.width(6.dp))
                                 Text(
                                     text = t,
                                     style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
-                                    color = if (isSelected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }

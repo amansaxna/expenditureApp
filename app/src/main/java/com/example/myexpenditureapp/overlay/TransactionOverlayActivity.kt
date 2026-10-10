@@ -35,8 +35,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.verticalScroll
+import com.example.myexpenditureapp.ui.component.CategorySelectionBottomSheet
 import androidx.lifecycle.lifecycleScope
 import com.example.myexpenditureapp.MainActivity
 import com.example.myexpenditureapp.data.Graph
@@ -154,18 +156,31 @@ fun TransactionOverlayDialog(
         amountText.toBigDecimalOrNull() ?: transaction.amount
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            dismissOnBackPress = true,
-            dismissOnClickOutside = true,
-            usePlatformDefaultWidth = false
-        )
+    var showCategorySheet by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = !showCategorySheet) {
+        onDismiss()
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onDismiss
+            ),
+        contentAlignment = Alignment.Center
     ) {
         Card(
             modifier = Modifier
                 .fillMaxWidth(0.92f)
-                .padding(vertical = 16.dp),
+                .padding(vertical = 16.dp)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {}
+                ),
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surface
@@ -175,7 +190,8 @@ fun TransactionOverlayDialog(
             Column(
                 modifier = Modifier
                     .padding(20.dp)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 // Header Row
@@ -264,8 +280,7 @@ fun TransactionOverlayDialog(
                                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     },
                                 shape = RoundedCornerShape(8.dp),
-                                color = if (isSelected) activeColor.copy(alpha = 0.18f) else Color.Transparent,
-                                border = if (isSelected) BorderStroke(1.5.dp, activeColor) else null,
+                                color = if (isSelected) activeColor else Color.Transparent,
                                 shadowElevation = if (isSelected) 1.dp else 0.dp
                             ) {
                                 Row(
@@ -277,14 +292,14 @@ fun TransactionOverlayDialog(
                                         imageVector = icon,
                                         contentDescription = null,
                                         modifier = Modifier.size(14.dp),
-                                        tint = if (isSelected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                        tint = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                                     )
                                     Spacer(Modifier.width(4.dp))
                                     Text(
                                         text = t,
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isSelected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
@@ -338,36 +353,108 @@ fun TransactionOverlayDialog(
                     textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = MonospaceFont)
                 )
 
-                // Quick Category Selector Chips
+                // Category & Subcategory Selector (Same format as Transaction Edit screen)
+                val selectedCategory = remember(categories, selectedCategoryId) {
+                    categories.find { it.id == selectedCategoryId }
+                }
+                val parentCategory = remember(categories, selectedCategory) {
+                    if (selectedCategory?.parentId != null) {
+                        categories.find { it.id == selectedCategory.parentId }
+                    } else null
+                }
+                val categoryDisplayText = remember(selectedCategory, parentCategory) {
+                    if (parentCategory != null) {
+                        "${parentCategory.icon ?: ""} ${parentCategory.name} > ${selectedCategory?.icon ?: ""} ${selectedCategory?.name ?: ""}".trim()
+                    } else if (selectedCategory != null) {
+                        "${selectedCategory.icon ?: ""} ${selectedCategory.name}".trim()
+                    } else {
+                        "Select Category & Subcategory"
+                    }
+                }
+
                 Text(
-                    text = "Select Category",
+                    text = "Category & Subcategory",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                Row(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            showCategorySheet = true
+                        }
                 ) {
-                    categories.forEach { category ->
-                        val isSelected = selectedCategoryId == category.id
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = {
-                                selectedCategoryId = if (isSelected) null else category.id
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            },
-                            label = { Text(category.name) },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Default.Category,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp)
+                    OutlinedTextField(
+                        value = categoryDisplayText,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Category & Subcategory") },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = false,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                            disabledBorderColor = if (selectedCategoryId != null) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f) else MaterialTheme.colorScheme.outlineVariant,
+                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            disabledLeadingIconColor = MaterialTheme.colorScheme.primary,
+                            disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
+                        leadingIcon = {
+                            val iconEmoji = selectedCategory?.icon ?: parentCategory?.icon
+                            if (!iconEmoji.isNullOrBlank()) {
+                                Text(iconEmoji, fontSize = 16.sp, modifier = Modifier.padding(start = 12.dp))
+                            } else {
+                                Icon(Icons.Default.Category, contentDescription = null)
+                            }
+                        }
+                    )
+                }
+
+                // Quick Root Category Chips with Real Emojis
+                val rootCategories = remember(categories) { categories.filter { it.parentId == null } }
+                if (rootCategories.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        rootCategories.forEach { rootCat ->
+                            val isRootActive = selectedCategoryId == rootCat.id || parentCategory?.id == rootCat.id
+                            FilterChip(
+                                selected = isRootActive,
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    val subcategories = categories.filter { it.parentId == rootCat.id }
+                                    if (subcategories.isEmpty()) {
+                                        selectedCategoryId = if (selectedCategoryId == rootCat.id) null else rootCat.id
+                                    } else {
+                                        selectedCategoryId = rootCat.id
+                                        showCategorySheet = true
+                                    }
+                                },
+                                label = { Text("${rootCat.icon ?: ""} ${rootCat.name}".trim()) },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
+                            )
+                        }
+
+                        SuggestionChip(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                showCategorySheet = true
                             },
+                            label = { Text("More...") },
+                            icon = { Icon(Icons.Default.MoreHoriz, contentDescription = null, modifier = Modifier.size(14.dp)) },
                             shape = RoundedCornerShape(10.dp)
                         )
                     }
@@ -449,6 +536,23 @@ fun TransactionOverlayDialog(
                     }
                 }
             }
+        }
+
+        if (showCategorySheet) {
+            CategorySelectionBottomSheet(
+                categories = categories,
+                selectedCategoryId = selectedCategoryId,
+                onCategorySelected = {
+                    selectedCategoryId = it
+                    showCategorySheet = false
+                },
+                onAddNewCategory = {
+                    showCategorySheet = false
+                },
+                onDismiss = {
+                    showCategorySheet = false
+                }
+            )
         }
     }
 }
