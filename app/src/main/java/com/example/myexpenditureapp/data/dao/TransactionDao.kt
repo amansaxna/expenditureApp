@@ -6,12 +6,13 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TransactionDao {
-    @Query("SELECT * FROM transactions ORDER BY timestamp DESC")
+    @Query("SELECT * FROM transactions WHERE isReviewed = 1 ORDER BY timestamp DESC")
     fun getAllTransactions(): Flow<List<Transaction>>
 
     @Query("""
         SELECT * FROM transactions 
-        WHERE (:accountId IS NULL OR accountId = :accountId OR toAccountId = :accountId)
+        WHERE isReviewed = 1
+        AND (:accountId IS NULL OR accountId = :accountId OR toAccountId = :accountId)
         AND (:categoryId IS NULL OR categoryId = :categoryId)
         AND (:type IS NULL OR type = :type)
         AND (:startDate IS NULL OR timestamp >= :startDate)
@@ -27,6 +28,17 @@ interface TransactionDao {
         endDate: Long? = null,
         query: String? = null
     ): Flow<List<Transaction>>
+
+    @Query("""
+        SELECT EXISTS(
+            SELECT 1 FROM transactions 
+            WHERE amount = :amount 
+            AND type = :type 
+            AND timestamp >= :startTime 
+            AND timestamp <= :endTime
+        )
+    """)
+    suspend fun existsSimilarTransaction(amount: java.math.BigDecimal, type: String, startTime: Long, endTime: Long): Boolean
 
     @Query("SELECT * FROM transactions WHERE categoryId = :categoryId AND timestamp >= :startDate AND timestamp <= :endDate")
     fun getTransactionsByCategoryAndDate(categoryId: Long, startDate: Long, endDate: Long): Flow<List<Transaction>>

@@ -49,6 +49,8 @@ class FakeTransactionRepository : TransactionRepository {
     }
     override suspend fun getTransactionById(id: Long): Transaction? = savedTransactions.find { it.id == id }
     override suspend fun existsBySmsId(smsId: String): Boolean = savedTransactions.any { it.smsId == smsId }
+    override suspend fun existsSimilarTransaction(amount: BigDecimal, type: String, startTime: Long, endTime: Long): Boolean =
+        savedTransactions.any { it.amount == amount && it.type == type && it.timestamp in startTime..endTime }
     override suspend fun deleteAllUnreviewedTransactions() {}
     override suspend fun deleteAllTransactions() {}
 }

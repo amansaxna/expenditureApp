@@ -20,6 +20,7 @@ interface TransactionRepository {
     suspend fun deleteTransaction(transaction: Transaction)
     suspend fun getTransactionById(id: Long): Transaction?
     suspend fun existsBySmsId(smsId: String): Boolean
+    suspend fun existsSimilarTransaction(amount: java.math.BigDecimal, type: String, startTime: Long, endTime: Long): Boolean
     suspend fun deleteAllUnreviewedTransactions()
     suspend fun deleteAllTransactions()
 }

@@ -28,11 +28,25 @@ class TransactionRepositoryImpl(
     override fun getUnreviewedTransactions(): Flow<List<Transaction>> = transactionDao.getUnreviewedTransactions()
 
     override suspend fun markAsReviewed(id: Long) {
-        transactionDao.markAsReviewed(id)
+        database.withTransaction {
+            val tx = transactionDao.getTransactionById(id)
+            if (tx != null && !tx.isReviewed) {
+                adjustBalances(tx, 1)
+                transactionDao.markAsReviewed(id)
+            }
+        }
+        com.example.myexpenditureapp.notifications.LiveStatusNotificationManager.refresh()
     }
 
     override suspend fun markAllAsReviewed() {
-        transactionDao.markAllAsReviewed()
+        database.withTransaction {
+            val unreviewed = transactionDao.getAllTransactionsSync().filter { !it.isReviewed }
+            for (tx in unreviewed) {
+                adjustBalances(tx, 1)
+            }
+            transactionDao.markAllAsReviewed()
+        }
+        com.example.myexpenditureapp.notifications.LiveStatusNotificationManager.refresh()
     }
 
     override suspend fun getTransactionById(id: Long): Transaction? = transactionDao.getTransactionById(id)
@@ -41,14 +55,16 @@ class TransactionRepositoryImpl(
         database.withTransaction {
             if (transaction.id != 0L) {
                 val oldTransaction = transactionDao.getTransactionById(transaction.id)
-                if (oldTransaction != null) {
-                    // Revert old transaction balances
+                if (oldTransaction != null && oldTransaction.isReviewed) {
+                    // Revert old transaction balances if previously reviewed
                     adjustBalances(oldTransaction, -1)
                 }
             }
             
-            // Apply new transaction balances
-            adjustBalances(transaction, 1)
+            // Apply new transaction balances ONLY if reviewed
+            if (transaction.isReviewed) {
+                adjustBalances(transaction, 1)
+            }
             
             if (transaction.id != 0L) {
                 transactionDao.updateTransaction(transaction)
@@ -61,8 +77,10 @@ class TransactionRepositoryImpl(
 
     override suspend fun deleteTransaction(transaction: Transaction) {
         database.withTransaction {
-            // Revert balances
-            adjustBalances(transaction, -1)
+            // Revert balances ONLY if previously reviewed
+            if (transaction.isReviewed) {
+                adjustBalances(transaction, -1)
+            }
             transactionDao.deleteTransaction(transaction)
         }
         com.example.myexpenditureapp.notifications.LiveStatusNotificationManager.refresh()
@@ -95,14 +113,14 @@ class TransactionRepositoryImpl(
 
     override suspend fun existsBySmsId(smsId: String): Boolean = transactionDao.existsBySmsId(smsId)
 
+    override suspend fun existsSimilarTransaction(amount: BigDecimal, type: String, startTime: Long, endTime: Long): Boolean =
+        transactionDao.existsSimilarTransaction(amount, type, startTime, endTime)
+
     override suspend fun deleteAllUnreviewedTransactions() {
         database.withTransaction {
-            val unreviewed = transactionDao.getAllTransactionsSync().filter { !it.isReviewed }
-            for (tx in unreviewed) {
-                adjustBalances(tx, -1)
-            }
             transactionDao.deleteAllUnreviewedTransactions()
         }
+        com.example.myexpenditureapp.notifications.LiveStatusNotificationManager.refresh()
     }
 
     override suspend fun deleteAllTransactions() {

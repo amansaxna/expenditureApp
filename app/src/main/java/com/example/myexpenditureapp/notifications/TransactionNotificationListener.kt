@@ -86,8 +86,11 @@ class TransactionNotificationListener : NotificationListenerService() {
                 Graph.provide(applicationContext)
 
                 // Check for duplicate
-                if (Graph.transactionRepository.existsBySmsId(uniqueId)) {
-                    Log.d(TAG, "Duplicate transaction for $uniqueId")
+                val windowStart = timestamp - 180_000L
+                val windowEnd = timestamp + 180_000L
+                if (Graph.transactionRepository.existsBySmsId(uniqueId) ||
+                    Graph.transactionRepository.existsSimilarTransaction(amount, type, windowStart, windowEnd)) {
+                    Log.d(TAG, "Duplicate transaction detected for $uniqueId")
                     return@launch
                 }
 

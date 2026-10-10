@@ -46,8 +46,11 @@ class SmsReceiver : BroadcastReceiver() {
             val smsId = "sms_${sender}_${txTime}_${smsTx.amount}"
             
             // Check for duplicates
-            if (Graph.transactionRepository.existsBySmsId(smsId)) {
-                Log.d("SmsReceiver", "Transaction already exists for $smsId")
+            val windowStart = txTime - 180_000L
+            val windowEnd = txTime + 180_000L
+            if (Graph.transactionRepository.existsBySmsId(smsId) ||
+                Graph.transactionRepository.existsSimilarTransaction(smsTx.amount, smsTx.type, windowStart, windowEnd)) {
+                Log.d("SmsReceiver", "Transaction already exists or duplicate detected for $smsId")
                 return@launch
             }
 
