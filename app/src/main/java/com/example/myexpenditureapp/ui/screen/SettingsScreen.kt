@@ -13,8 +13,10 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -46,6 +48,9 @@ import com.example.myexpenditureapp.data.backup.BackupManager
 import com.example.myexpenditureapp.ui.theme.*
 import com.example.myexpenditureapp.ui.viewmodel.ThemeViewModel
 import com.example.myexpenditureapp.ui.component.ForexChartAnimation
+import com.example.myexpenditureapp.ui.component.GeometricMascotBot
+import com.example.myexpenditureapp.ui.component.MascotMood
+import com.example.myexpenditureapp.ui.component.NomiCompanionOverlay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,6 +70,9 @@ fun SettingsScreen(
     val aboutIconRotation = remember { Animatable(0f) }
     val aboutIconScale = remember { Animatable(1f) }
     var showAboutDialog by remember { mutableStateOf(false) }
+    var showNomiOverlay by remember { mutableStateOf(false) }
+    var previewMood by remember { mutableStateOf(MascotMood.NEUTRAL) }
+    var isNomiExtended by remember { mutableStateOf(false) }
 
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     var isNotificationAccessGranted by remember {
@@ -545,6 +553,227 @@ fun SettingsScreen(
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Nomi Companion Sub-section
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        // Hero Identity Row with Expand/Collapse Dropdown
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    isNomiExtended = !isNomiExtended
+                                },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .combinedClickable(
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            isNomiExtended = !isNomiExtended
+                                        },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            showNomiOverlay = true
+                                        }
+                                    ),
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color(0xFF0D131F),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    GeometricMascotBot(
+                                        mood = previewMood,
+                                        size = 32.dp,
+                                        animated = true
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(14.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Nomi AI Companion",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "SpendZen's discreet geometric AI companion that ambiently mirrors your financial vitals in real time.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            val dropdownRotation by androidx.compose.animation.core.animateFloatAsState(
+                                targetValue = if (isNomiExtended) 180f else 0f,
+                                animationSpec = tween(durationMillis = 250),
+                                label = "nomi_dropdown_rotation"
+                            )
+
+                            IconButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    isNomiExtended = !isNomiExtended
+                                },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowDown,
+                                    contentDescription = if (isNomiExtended) "Collapse Nomi Behaviors" else "Expand Nomi Behaviors",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .graphicsLayer { rotationZ = dropdownRotation }
+                                )
+                            }
+                        }
+
+                        // Extended content showing all behaviors when toggled
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = isNomiExtended,
+                            enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+                            exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+                        ) {
+                            Column {
+                                Spacer(modifier = Modifier.height(14.dp))
+
+                                // Subtitle
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "BEHAVIORAL STATES",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                                        letterSpacing = 0.8.sp
+                                    )
+                                    Text(
+                                        text = "TAP: SELECT • HOLD: PREVIEW",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontSize = 10.sp
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                // Behaviors List - tap to select, hold to preview in console!
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    NomiBehaviorItem(
+                                        mood = MascotMood.NEUTRAL,
+                                        title = "Neutral (| |)",
+                                        tag = "Balanced Pace",
+                                        tagColor = Color(0xFF38BDF8),
+                                        description = "Cyan pill LEDs with organic eyelid blinks. Reflects steady, balanced expenditure within baseline targets.",
+                                        isSelected = previewMood == MascotMood.NEUTRAL,
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            previewMood = MascotMood.NEUTRAL
+                                        },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            previewMood = MascotMood.NEUTRAL
+                                            showNomiOverlay = true
+                                        }
+                                    )
+
+                                    NomiBehaviorItem(
+                                        mood = MascotMood.OPTIMAL,
+                                        title = "Thriving / Optimal (^ ^)",
+                                        tag = "Healthy Surplus",
+                                        tagColor = IncomeGreen,
+                                        description = "Mint smiling arcs with celebratory vertical bobbing. Signals budget surplus and spending safely below daily allowance.",
+                                        isSelected = previewMood == MascotMood.OPTIMAL,
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            previewMood = MascotMood.OPTIMAL
+                                        },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            previewMood = MascotMood.OPTIMAL
+                                            showNomiOverlay = true
+                                        }
+                                    )
+
+                                    NomiBehaviorItem(
+                                        mood = MascotMood.ALERT,
+                                        title = "Alert (\\ /)",
+                                        tag = "Budget Warning",
+                                        tagColor = ExpenseRed,
+                                        description = "Coral crimson sharp slits with fast jitter shake pulse. Flags anomalous spending velocity or budget threshold breach.",
+                                        isSelected = previewMood == MascotMood.ALERT,
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            previewMood = MascotMood.ALERT
+                                        },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            previewMood = MascotMood.ALERT
+                                            showNomiOverlay = true
+                                        }
+                                    )
+
+                                    NomiBehaviorItem(
+                                        mood = MascotMood.SLEEPING,
+                                        title = "Sleeping (- -)",
+                                        tag = "Ambient Rest",
+                                        tagColor = Color(0xFF818CF8),
+                                        description = "Dim resting bars with slow breathing float and floating 'z'. Activates between 23:00 - 06:00 or during long periods of quiet.",
+                                        isSelected = previewMood == MascotMood.SLEEPING,
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            previewMood = MascotMood.SLEEPING
+                                        },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            previewMood = MascotMood.SLEEPING
+                                            showNomiOverlay = true
+                                        }
+                                    )
+
+                                    NomiBehaviorItem(
+                                        mood = MascotMood.SCANNING,
+                                        title = "Scanning (—·—)",
+                                        tag = "Auto Radar",
+                                        tagColor = Color(0xFFA855F7),
+                                        description = "High-contrast reticle with sweeping radar scanlines. Active during SMS/UPI parsing and complex analytics queries.",
+                                        isSelected = previewMood == MascotMood.SCANNING,
+                                        onClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            previewMood = MascotMood.SCANNING
+                                        },
+                                        onLongClick = {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            previewMood = MascotMood.SCANNING
+                                            showNomiOverlay = true
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -643,6 +872,12 @@ fun SettingsScreen(
                 }
             )
         }
+
+        NomiCompanionOverlay(
+            isOpen = showNomiOverlay,
+            overrideMood = previewMood,
+            onDismiss = { showNomiOverlay = false }
+        )
     }
 }
 
@@ -753,3 +988,105 @@ private fun SettingsNavigationRow(
         }
     }
 }
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun NomiBehaviorItem(
+    mood: MascotMood,
+    title: String,
+    tag: String,
+    tagColor: Color,
+    description: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
+        color = if (isSelected) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.28f)
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.35f)
+        },
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(
+            width = if (isSelected) 1.5.dp else 0.5.dp,
+            color = if (isSelected) {
+                tagColor.copy(alpha = 0.75f)
+            } else {
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
+            }
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(12.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.Top
+        ) {
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = RoundedCornerShape(10.dp),
+                color = Color(0xFF0B1019),
+                border = BorderStroke(0.5.dp, tagColor.copy(alpha = 0.4f))
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    GeometricMascotBot(
+                        mood = mood,
+                        size = 32.dp,
+                        animated = true,
+                        onClick = onClick
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = tagColor.copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = tag,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = tagColor,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            fontSize = 10.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(3.dp))
+
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 16.sp,
+                    fontSize = 12.sp
+                )
+            }
+        }
+    }
+}
+

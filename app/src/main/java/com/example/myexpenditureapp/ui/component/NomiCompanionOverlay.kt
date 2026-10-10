@@ -31,6 +31,7 @@ import com.example.myexpenditureapp.ui.theme.IncomeGreen
 import com.example.myexpenditureapp.ui.theme.MonospaceFont
 import com.example.myexpenditureapp.utils.formatIndian
 import java.math.BigDecimal
+import java.util.Calendar
 
 /**
  * Nomi Companion Modal Overlay.
@@ -46,15 +47,10 @@ fun NomiCompanionOverlay(
     safeDailyAllowance: BigDecimal = BigDecimal.ZERO,
     todayBurn: BigDecimal = BigDecimal.ZERO,
     monthSpent: BigDecimal = BigDecimal.ZERO,
+    overrideMood: MascotMood? = null,
     onOpenAnalytics: (() -> Unit)? = null
 ) {
     if (!isOpen) return
-
-    val targetMood = when (healthStatus) {
-        HealthStatus.OPTIMAL -> MascotMood.OPTIMAL
-        HealthStatus.CRITICAL -> MascotMood.ALERT
-        else -> MascotMood.NEUTRAL
-    }
 
     var isBootComplete by remember { mutableStateOf(false) }
 
@@ -99,6 +95,17 @@ fun NomiCompanionOverlay(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    val targetMood = overrideMood ?: when {
+                        Calendar.getInstance().get(Calendar.HOUR_OF_DAY) in 0..5 || Calendar.getInstance().get(Calendar.HOUR_OF_DAY) >= 23 ->
+                            MascotMood.SLEEPING
+                        healthStatus == HealthStatus.OPTIMAL ->
+                            MascotMood.OPTIMAL
+                        healthStatus == HealthStatus.CRITICAL ->
+                            MascotMood.ALERT
+                        else ->
+                            MascotMood.NEUTRAL
+                    }
+
                     // Header Bar
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -115,20 +122,33 @@ fun NomiCompanionOverlay(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
+                                val statusColor = when {
+                                    !isBootComplete -> Color(0xFF38BDF8)
+                                    targetMood == MascotMood.SLEEPING -> Color(0xFF38BDF8).copy(alpha = 0.7f)
+                                    targetMood == MascotMood.ALERT -> ExpenseRed
+                                    targetMood == MascotMood.OPTIMAL -> IncomeGreen
+                                    else -> Color(0xFF38BDF8)
+                                }
                                 Box(
                                     modifier = Modifier
                                         .size(7.dp)
                                         .clip(CircleShape)
-                                        .background(if (isBootComplete) IncomeGreen else Color(0xFF38BDF8))
+                                        .background(statusColor)
                                 )
                                 Text(
-                                    text = if (isBootComplete) "NOMI ONLINE" else "INITIALIZING...",
+                                    text = when {
+                                        !isBootComplete -> "INITIALIZING..."
+                                        targetMood == MascotMood.SLEEPING -> "NOMI SLEEPING"
+                                        targetMood == MascotMood.ALERT -> "ALERT MODE"
+                                        targetMood == MascotMood.OPTIMAL -> "NOMI ONLINE"
+                                        else -> "NOMI ONLINE"
+                                    },
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontFamily = MonospaceFont,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold
                                     ),
-                                    color = if (isBootComplete) IncomeGreen else Color(0xFF38BDF8)
+                                    color = statusColor
                                 )
                             }
                         }
@@ -176,11 +196,15 @@ fun NomiCompanionOverlay(
                                 border = BorderStroke(1.dp, Color(0xFF334155))
                             ) {
                                 Text(
-                                    text = when (healthStatus) {
-                                        HealthStatus.OPTIMAL ->
+                                    text = when (targetMood) {
+                                        MascotMood.OPTIMAL ->
                                             "\"All systems nominal! Your expenditure is healthy and well within safe runway limits.\""
-                                        HealthStatus.CRITICAL ->
+                                        MascotMood.ALERT ->
                                             "\"Attention: High burn rate detected! Leak radar is monitoring for irregular subscriptions.\""
+                                        MascotMood.SLEEPING ->
+                                            "\"Zzz... Nomi is in low-power resting mode. Expenses are quiet and peaceful for the night.\""
+                                        MascotMood.SCANNING ->
+                                            "\"Auto-parsing transaction streams and verifying expense ledger hashes...\""
                                         else ->
                                             "\"Standing by. Real-time transaction surveillance and budget envelopes active.\""
                                     },

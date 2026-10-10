@@ -5,6 +5,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -45,14 +46,14 @@ enum class MascotMood {
     OPTIMAL,   // Budget under control / surplus (Mint green smiling arcs)
     ALERT,     // High burn / leak detected / critical budget (Coral red sharp eyes)
     SCANNING,  // Auto-parsing SMS / calculation in progress
-    SLEEPING   // Idle / empty state / late night
+    SLEEPING   // Idle / empty state / late night / resting snoozing mode
 }
 
 /**
  * Nomi — A minimal, hardware-accelerated geometric companion inspired by
  * Teenage Engineering, Grok Bot, and Nothing OS aesthetics.
  *
- * Cost: 0 KB image weight, hardware-accelerated, pure math/geometry.
+ * Cost: 0 KB image weight, hardware-accelerated, pure math/geometry vector graphics.
  */
 @Composable
 fun GeometricMascotBot(
@@ -64,13 +65,15 @@ fun GeometricMascotBot(
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "nomi_animations")
 
-    // Organic micro-floating/breathing movement (±2.5dp)
+    // Organic micro-floating/breathing movement (±2.5dp for normal, slower ±1.8dp for sleeping)
+    val floatDuration = if (mood == MascotMood.SLEEPING) 3400 else 2200
+    val floatRange = if (mood == MascotMood.SLEEPING) 1.8f else 2.5f
     val floatOffset by if (animated) {
         infiniteTransition.animateFloat(
-            initialValue = -2.5f,
-            targetValue = 2.5f,
+            initialValue = -floatRange,
+            targetValue = floatRange,
             animationSpec = infiniteRepeatable(
-                animation = tween(2200, easing = FastOutSlowInEasing),
+                animation = tween(floatDuration, easing = FastOutSlowInEasing),
                 repeatMode = RepeatMode.Reverse
             ),
             label = "nomi_float"
@@ -79,13 +82,20 @@ fun GeometricMascotBot(
         remember { mutableStateOf(0f) }
     }
 
-    // Natural periodic blink cycle (stays open most of the time, blinks quickly every ~4s)
+    // Natural periodic blink cycle using keyframes (stays open most of the time, blinks smoothly every ~3.8s)
     val blinkScale by if (animated && (mood == MascotMood.NEUTRAL || mood == MascotMood.OPTIMAL)) {
         infiniteTransition.animateFloat(
             initialValue = 1f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(
-                animation = tween(4000, easing = LinearEasing),
+                animation = keyframes {
+                    durationMillis = 3800
+                    1f at 0
+                    1f at 3400
+                    0.06f at 3520
+                    1f at 3640
+                    1f at 3800
+                },
                 repeatMode = RepeatMode.Restart
             ),
             label = "nomi_blink"
@@ -109,19 +119,36 @@ fun GeometricMascotBot(
         remember { mutableStateOf(0f) }
     }
 
-    // Subtle breathing glow intensity
+    // Subtle breathing glow intensity (slower and deeper during sleep)
+    val glowDuration = if (mood == MascotMood.SLEEPING) 3000 else 1600
+    val minGlow = if (mood == MascotMood.SLEEPING) 0.35f else 0.75f
     val glowAlpha by if (animated) {
         infiniteTransition.animateFloat(
-            initialValue = 0.75f,
+            initialValue = minGlow,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(
-                animation = tween(1600, easing = FastOutSlowInEasing),
+                animation = tween(glowDuration, easing = FastOutSlowInEasing),
                 repeatMode = RepeatMode.Reverse
             ),
             label = "nomi_glow"
         )
     } else {
         remember { mutableStateOf(1f) }
+    }
+
+    // Floating sleepy 'Z' animation particle when in SLEEPING mood
+    val sleepZCycle by if (animated && mood == MascotMood.SLEEPING) {
+        infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(2800, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "nomi_sleep_z"
+        )
+    } else {
+        remember { mutableStateOf(0f) }
     }
 
     val interactionSource = remember { MutableInteractionSource() }
@@ -199,18 +226,18 @@ fun GeometricMascotBot(
                 cornerRadius = CornerRadius(visorCorner, visorCorner)
             )
 
-            // 4. Expressive Digital LED Matrix Eyes
+            // 4. Expressive Digital LED Visor Eyes
             val ledColor = when (mood) {
                 MascotMood.OPTIMAL -> IncomeGreen.copy(alpha = glowAlpha)
                 MascotMood.ALERT -> ExpenseRed.copy(alpha = glowAlpha)
                 MascotMood.NEUTRAL -> Color(0xFF38BDF8).copy(alpha = glowAlpha) // Neon Cyan
                 MascotMood.SCANNING -> Color(0xFF818CF8).copy(alpha = glowAlpha) // Indigo
-                MascotMood.SLEEPING -> Color(0xFF64748B).copy(alpha = 0.6f)     // Dim Slate
+                MascotMood.SLEEPING -> Color(0xFF38BDF8).copy(alpha = 0.55f * glowAlpha) // Dim Soft Cyan
             }
 
             // Glow bloom behind eyes
             drawCircle(
-                color = ledColor.copy(alpha = 0.15f * glowAlpha),
+                color = ledColor.copy(alpha = 0.18f * glowAlpha),
                 radius = visorSize * 0.32f,
                 center = Offset(w / 2f, h / 2f)
             )
@@ -223,14 +250,15 @@ fun GeometricMascotBot(
                 visorInset = visorInset,
                 visorSize = visorSize,
                 blinkScale = blinkScale,
-                scanProgress = scanProgress
+                scanProgress = scanProgress,
+                sleepZCycle = sleepZCycle
             )
         }
     }
 }
 
 /**
- * Draws the minimalist geometric eye matrices according to mood.
+ * Draws the minimalist geometric eye matrices and animations according to mood.
  */
 private fun DrawScope.drawMoodEyes(
     mood: MascotMood,
@@ -240,7 +268,8 @@ private fun DrawScope.drawMoodEyes(
     visorInset: Float,
     visorSize: Float,
     blinkScale: Float,
-    scanProgress: Float
+    scanProgress: Float,
+    sleepZCycle: Float
 ) {
     val centerY = h * 0.50f
     val eyeSpacing = w * 0.14f
@@ -249,7 +278,7 @@ private fun DrawScope.drawMoodEyes(
 
     when (mood) {
         MascotMood.NEUTRAL -> {
-            // Minimal vertical cyan LED capsules
+            // Minimal vertical cyan LED capsules with organic blink scaling
             val pillWidth = w * 0.075f
             val pillHeight = (w * 0.18f) * blinkScale
 
@@ -272,7 +301,7 @@ private fun DrawScope.drawMoodEyes(
             // Cheerful mint inverted-V arcs (^ ^)
             val strokeWidth = w * 0.065f
             val arcSpan = w * 0.09f
-            val arcHeight = w * 0.08f
+            val arcHeight = w * 0.08f * blinkScale
 
             val leftPath = Path().apply {
                 moveTo(leftEyeCenterX - arcSpan, centerY + (arcHeight * 0.5f))
@@ -343,9 +372,9 @@ private fun DrawScope.drawMoodEyes(
         }
 
         MascotMood.SLEEPING -> {
-            // Calm horizontal resting dashes (- -)
-            val dashWidth = w * 0.12f
-            val strokeWidth = w * 0.05f
+            // Calm horizontal resting eye bars with soft rounded ends (- -)
+            val dashWidth = w * 0.13f
+            val strokeWidth = w * 0.055f
 
             drawLine(
                 color = color,
@@ -362,13 +391,33 @@ private fun DrawScope.drawMoodEyes(
                 strokeWidth = strokeWidth,
                 cap = StrokeCap.Round
             )
+
+            // Floating animated 'z' drifting gently upward from the right eye
+            if (sleepZCycle > 0f) {
+                val zAlpha = (1f - sleepZCycle).coerceIn(0f, 1f) * 0.70f
+                val zY = centerY - (w * 0.10f) - (sleepZCycle * w * 0.20f)
+                val zX = rightEyeCenterX + (w * 0.14f) + (sleepZCycle * w * 0.06f)
+                val zSize = w * 0.045f
+
+                val zPath = Path().apply {
+                    moveTo(zX - zSize, zY - zSize)
+                    lineTo(zX + zSize, zY - zSize)
+                    lineTo(zX - zSize, zY + zSize)
+                    lineTo(zX + zSize, zY + zSize)
+                }
+                drawPath(
+                    path = zPath,
+                    color = color.copy(alpha = zAlpha),
+                    style = Stroke(width = w * 0.02f, cap = StrokeCap.Round)
+                )
+            }
         }
     }
 }
 
 /**
  * Animated Mascot Awakening / Boot Sequence:
- * 1. Chassis scale spring & visor power-on expansion.
+ * 1. Chassis scale spring & visor power-on vertical CRT expansion.
  * 2. Dual lidar radar scan across visor.
  * 3. Curious left/right eye glance and playful wink.
  * 4. Hands off seamlessly to live steady-state floating/blinking mascot behavior.
@@ -530,4 +579,3 @@ fun BootAnimatedMascotBot(
         }
     }
 }
-

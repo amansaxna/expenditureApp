@@ -203,60 +203,90 @@ fun AnalyticsScreen(
                     )
                 }
 
+                // 1. Integrative Spending Curve Card
                 item {
-                    SectionHeader("SPENDING TREND", "Daily timeline velocity")
-                    CompactChartCard {
-                        LineChart(
-                            data = spendingTrend,
-                            projectedData = projectedTrend,
-                            lineColor = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(8.dp)
+                    val daysRemaining = (31 - Calendar.getInstance().get(Calendar.DAY_OF_MONTH)).coerceAtLeast(1)
+                    val safeAllowance = if (performance != null && performance!!.totalBudgeted > BigDecimal.ZERO) {
+                        performance!!.totalBudgeted.subtract(performance!!.totalSpent)
+                            .divide(BigDecimal(daysRemaining), 0, RoundingMode.HALF_UP)
+                            .coerceAtLeast(BigDecimal.ZERO)
+                    } else BigDecimal.ZERO
+
+                    IntegrativeSpendingCurveCard(
+                        spendingTrend = spendingTrend,
+                        safeDailyAllowance = safeAllowance,
+                        projectedTotal = performance?.totalSpent ?: BigDecimal.ZERO
+                    )
+                }
+
+                // 2. Expense Category Donut & Breakdown Card
+                item {
+                    val totalSpent = performance?.totalSpent 
+                        ?: categorySpending.values.fold(BigDecimal.ZERO) { acc, b -> acc.add(b) }
+                    ExpenseCategoryDonutCard(
+                        categorySpending = categorySpending,
+                        totalSpent = totalSpent,
+                        onCategoryClick = { cat ->
+                            cat?.let { viewModel.drillDownCategory(it) }
+                        }
+                    )
+                }
+
+                // 3. Daily Cash Burn Runway & Solvency Card
+                item {
+                    val totalLiquidNet = accounts.fold(BigDecimal.ZERO) { acc, a -> acc.add(a.balance) }
+                    val curDay = Calendar.getInstance().get(Calendar.DAY_OF_MONTH).coerceAtLeast(1)
+                    val dailyBurnAvg = (performance?.totalSpent ?: BigDecimal.ZERO)
+                        .divide(BigDecimal(curDay), 0, RoundingMode.HALF_UP)
+
+                    CashBurnRunwayCard(
+                        liquidReserves = totalLiquidNet,
+                        monthlyExpense = performance?.totalSpent ?: BigDecimal.ZERO,
+                        dailyBurnAverage = dailyBurnAvg
+                    )
+                }
+
+                // 4. 5-Axis Micro-Leak Radar & Anomaly Scanner Card
+                item {
+                    val daysRemaining = (31 - Calendar.getInstance().get(Calendar.DAY_OF_MONTH)).coerceAtLeast(1)
+                    val safeAllowance = if (performance != null && performance!!.totalBudgeted > BigDecimal.ZERO) {
+                        performance!!.totalBudgeted.subtract(performance!!.totalSpent)
+                            .divide(BigDecimal(daysRemaining), 0, RoundingMode.HALF_UP)
+                            .coerceAtLeast(BigDecimal.ZERO)
+                    } else BigDecimal.ZERO
+
+                    val microSummary = remember(transactions, categories, safeAllowance) {
+                        com.example.myexpenditureapp.domain.insights.MicroSpendAnalyzer.analyze(
+                            transactions = transactions,
+                            categories = categories,
+                            safeDailyAllowance = safeAllowance
                         )
                     }
+                    MicroLeakRadarCard(
+                        transactions = transactions,
+                        categories = categories,
+                        microSummary = microSummary
+                    )
                 }
             }
 
-            // Category Mix & Interactive Drill-Down
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    SectionHeader(
-                        if (drillState.level == DrillLevel.CATEGORY) "CATEGORY DRILL-DOWN" else "CATEGORY MIX",
-                        if (drillState.level == DrillLevel.CATEGORY) "Merchant outlays for this category" else "Tap a category below to drill down"
-                    )
-                    if (drillState.level == DrillLevel.CATEGORY) {
+            // Category Drill-Down when inspecting a specific category
+            if (drillState.level == DrillLevel.CATEGORY) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        SectionHeader(
+                            "CATEGORY DRILL-DOWN",
+                            "Merchant outlays for this category"
+                        )
                         TextButton(onClick = { viewModel.drillUp() }) {
                             Text("Drill Up ↑", fontWeight = FontWeight.Bold)
                         }
-                    } else {
-                        FilterChip(
-                            selected = isParentRollupEnabled,
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                viewModel.toggleParentRollup()
-                            },
-                            label = {
-                                Text(
-                                    if (isParentRollupEnabled) "Rollup to Parents" else "Detailed Leaf",
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    if (isParentRollupEnabled) Icons.Default.AccountTree else Icons.AutoMirrored.Filled.List,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                            },
-                            shape = RoundedCornerShape(8.dp)
-                        )
                     }
-                }
 
-                if (drillState.level == DrillLevel.CATEGORY) {
                     // Merchant breakdown within the category
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -307,53 +337,6 @@ fun AnalyticsScreen(
                             }
                         }
                     }
-                } else {
-                    CompactChartCard {
-                        PieChart(
-                            data = categorySpending.mapKeys { it.key?.name ?: "Other" },
-                            modifier = Modifier.padding(vertical = 16.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Tap-to-Drill Category Chips
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        categorySpending.forEach { (cat, amount) ->
-                            if (cat != null && amount > BigDecimal.ZERO) {
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-                                    modifier = Modifier.clickable {
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        viewModel.drillDownCategory(cat)
-                                    }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(cat.icon ?: "📁", style = MaterialTheme.typography.bodySmall)
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(cat.name, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            amount.formatIndian(),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontFamily = MonospaceFont,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontWeight = FontWeight.ExtraBold
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
                 }
             }
 
@@ -395,60 +378,6 @@ fun AnalyticsScreen(
                     }
                 }
 
-                item {
-                    SectionHeader("FINANCIAL RUNWAY & SOLVENCY", "Liquid reserves vs baseline monthly burn")
-                    CompactChartCard {
-                        val totalLiquidNet = accounts.fold(BigDecimal.ZERO) { acc, a -> acc.add(a.balance) }
-                        val monthlySpent = performance?.totalSpent ?: BigDecimal.ZERO
-                        val runwayMonths = if (monthlySpent > BigDecimal.ZERO) {
-                            totalLiquidNet.divide(monthlySpent, 1, RoundingMode.HALF_UP).toDouble()
-                        } else 6.0
-
-                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text("Emergency Runway", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                                    Text("Total liquid reserves: ${totalLiquidNet.formatIndian()}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = if (runwayMonths >= 3.0) IncomeGreen.copy(alpha = 0.15f) else ExpenseRed.copy(alpha = 0.15f),
-                                    border = BorderStroke(1.dp, if (runwayMonths >= 3.0) IncomeGreen.copy(alpha = 0.3f) else ExpenseRed.copy(alpha = 0.3f))
-                                ) {
-                                    Text(
-                                        "${runwayMonths} Months",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontFamily = MonospaceFont,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = if (runwayMonths >= 3.0) IncomeGreen else ExpenseRed,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    )
-                                }
-                            }
-                            LinearProgressIndicator(
-                                progress = { (runwayMonths.toFloat() / 6f).coerceIn(0.05f, 1f) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(8.dp)
-                                    .clip(RoundedCornerShape(4.dp)),
-                                color = if (runwayMonths >= 3.0) IncomeGreen else ExpenseRed,
-                                trackColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("0m Critical", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = ExpenseRed.copy(alpha = 0.8f))
-                                Text("3m Safe", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = AmberWarning.copy(alpha = 0.8f))
-                                Text("6m+ Resilient", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = IncomeGreen.copy(alpha = 0.8f))
-                            }
-                        }
-                    }
-                }
             }
 
             // Drilled-Down Focused Transaction Stream
