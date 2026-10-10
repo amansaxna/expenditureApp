@@ -45,6 +45,8 @@ import com.example.myexpenditureapp.ui.component.StandardTransactionRow
 import com.example.myexpenditureapp.ui.component.CalculatorTextField
 import com.example.myexpenditureapp.ui.component.CategoryTabSelector
 import com.example.myexpenditureapp.ui.component.evaluateExpression
+import com.example.myexpenditureapp.ui.component.GeometricMascotBot
+import com.example.myexpenditureapp.ui.component.MascotMood
 import com.example.myexpenditureapp.ui.component.BaselineThresholdEditorDialog
 import com.example.myexpenditureapp.ui.viewmodel.SpendTypeFilter
 import com.example.myexpenditureapp.ui.theme.MonospaceFont
@@ -240,18 +242,24 @@ fun TransactionListScreen(
                     .padding(innerPadding),
                 contentAlignment = Alignment.Center
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ReceiptLong,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.outlineVariant
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    GeometricMascotBot(
+                        mood = MascotMood.SLEEPING,
+                        size = 56.dp
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         "No transactions found for this month",
                         style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "Tap + to log an expense or income",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
                     )
                 }
             }

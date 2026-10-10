@@ -65,6 +65,7 @@ fun SmartFinanceDigestCard(
     var showMicroDetailDialog by remember { mutableStateOf(false) }
     var showMajorDetailDialog by remember { mutableStateOf(false) }
     var showThresholdEditorDialog by remember { mutableStateOf(false) }
+    var showNomiOverlay by remember { mutableStateOf(false) }
     
     var isOverallHistory by remember { mutableStateOf(false) }
     var customThresholdOverride by remember { mutableStateOf<BigDecimal?>(null) }
@@ -163,6 +164,19 @@ fun SmartFinanceDigestCard(
         )
     }
 
+    if (showNomiOverlay) {
+        NomiCompanionOverlay(
+            isOpen = showNomiOverlay,
+            onDismiss = { showNomiOverlay = false },
+            healthStatus = activeDigest.healthStatus,
+            healthScore = activeDigest.healthScore,
+            safeDailyAllowance = activeDigest.safeDailySpend,
+            todayBurn = activeDigest.todayBurn,
+            monthSpent = activeDigest.totalSpentThisMonth,
+            onOpenAnalytics = { onOpenMicroAnalysis?.invoke(isOverallHistory) }
+        )
+    }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -195,11 +209,17 @@ fun SmartFinanceDigestCard(
                         onTotalBalanceClick()
                     }
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp)
+                    GeometricMascotBot(
+                        mood = when (digest.healthStatus) {
+                            HealthStatus.OPTIMAL -> MascotMood.OPTIMAL
+                            HealthStatus.CRITICAL -> MascotMood.ALERT
+                            else -> MascotMood.NEUTRAL
+                        },
+                        size = 22.dp,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            showNomiOverlay = true
+                        }
                     )
                     Text(
                         text = if (isOverallHistory) "OVERALL DIGEST" else "MONTH DIGEST",

@@ -39,6 +39,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.verticalScroll
 import com.example.myexpenditureapp.ui.component.CategorySelectionBottomSheet
+import com.example.myexpenditureapp.ui.component.GeometricMascotBot
+import com.example.myexpenditureapp.ui.component.MascotMood
 import androidx.lifecycle.lifecycleScope
 import com.example.myexpenditureapp.MainActivity
 import com.example.myexpenditureapp.data.Graph
@@ -202,21 +204,12 @@ fun TransactionOverlayDialog(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primaryContainer
-                        ) {
-                            Icon(
-                                Icons.Default.Bolt,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier
-                                    .padding(6.dp)
-                                    .size(18.dp)
-                            )
-                        }
+                        GeometricMascotBot(
+                            mood = MascotMood.SCANNING,
+                            size = 28.dp
+                        )
                         Text(
                             text = "Auto Payment Detected",
                             style = MaterialTheme.typography.titleMedium,
