@@ -73,6 +73,10 @@ fun AccountListScreen(
     onReviewTransaction: (Transaction) -> Unit,
     onOpenSmartInbox: () -> Unit = {},
     onOpenGoals: () -> Unit = {},
+    onOpenTransactions: () -> Unit = {},
+    onOpenSubscriptions: () -> Unit = {},
+    onOpenBudgets: () -> Unit = {},
+    onOpenAccounts: () -> Unit = {},
     settlementViewModel: com.example.myexpenditureapp.ui.viewmodel.MonthlySettlementViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
     val accounts by accountViewModel.accounts.collectAsStateWithLifecycle()
@@ -258,12 +262,36 @@ fun AccountListScreen(
             item {
                 com.example.myexpenditureapp.ui.component.SmartFinanceDigestCard(
                     digest = smartDigest,
+                    onTotalBalanceClick = onOpenAccounts,
+                    onSpentMonthClick = onOpenTransactions,
+                    onTodayBurnClick = onOpenTransactions,
+                    onLeakRadarClick = onOpenSmartInbox,
+                    onUpcomingBillsClick = onOpenSubscriptions,
+                    onSaveBudgetLimit = { newLimit ->
+                        val currentCal = java.util.Calendar.getInstance()
+                        val m = currentCal.get(java.util.Calendar.MONTH) + 1
+                        val y = currentCal.get(java.util.Calendar.YEAR)
+                        val existingBudget = budgetsWithProgress.firstOrNull()?.budget
+                        if (existingBudget != null) {
+                            budgetViewModel.saveBudget(existingBudget.copy(limitAmount = newLimit))
+                        } else if (categories.isNotEmpty()) {
+                            budgetViewModel.saveBudget(
+                                com.example.myexpenditureapp.data.entity.Budget(
+                                    categoryId = categories.first().id,
+                                    limitAmount = newLimit,
+                                    period = "Monthly",
+                                    month = m,
+                                    year = y
+                                )
+                            )
+                        }
+                    },
                     onTacticalActionClick = { actionType ->
                         when (actionType) {
                             com.example.myexpenditureapp.domain.insights.ActionType.REVIEW_TRANSACTIONS -> onOpenSmartInbox()
                             com.example.myexpenditureapp.domain.insights.ActionType.SWEEP_TO_GOAL -> onOpenGoals()
-                            com.example.myexpenditureapp.domain.insights.ActionType.REDUCE_BUDGET -> { /* Nav or handled in budget tab */ }
-                            com.example.myexpenditureapp.domain.insights.ActionType.VIEW_SUBSCRIPTIONS -> { /* Handled in settings/radar */ }
+                            com.example.myexpenditureapp.domain.insights.ActionType.REDUCE_BUDGET -> onOpenBudgets()
+                            com.example.myexpenditureapp.domain.insights.ActionType.VIEW_SUBSCRIPTIONS -> onOpenSubscriptions()
                         }
                     }
                 )

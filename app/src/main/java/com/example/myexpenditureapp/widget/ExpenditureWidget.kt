@@ -2,6 +2,7 @@ package com.example.myexpenditureapp.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.*
@@ -13,9 +14,11 @@ import androidx.glance.appwidget.*
 import androidx.glance.layout.*
 import androidx.glance.text.*
 import androidx.glance.unit.ColorProvider
-import androidx.glance.GlanceTheme
 import com.example.myexpenditureapp.MainActivity
+import com.example.myexpenditureapp.R
 import com.example.myexpenditureapp.data.Graph
+import com.example.myexpenditureapp.domain.insights.DigestCalculator
+import com.example.myexpenditureapp.domain.insights.HealthStatus
 import com.example.myexpenditureapp.utils.formatIndian
 import kotlinx.coroutines.flow.first
 import java.math.BigDecimal
@@ -31,12 +34,20 @@ class ExpenditureWidget : GlanceAppWidget() {
         
         val accounts = Graph.accountRepository.getAllAccounts().first()
         val transactions = Graph.transactionRepository.getAllTransactions().first()
+        val budgets = Graph.budgetRepository.getAllBudgets().first()
+        val subscriptions = Graph.subscriptionRepository.getAllSubscriptions().first()
+        val savingGoals = Graph.savingGoalRepository.getAllGoals().first()
+        val categories = Graph.categoryRepository.getAllCategories().first()
+
         val unreviewed = transactions.filter { !it.isReviewed }
-        
         val totalBalance = accounts.fold(BigDecimal.ZERO) { acc, account -> acc.add(account.balance) }
         
         val calendar = Calendar.getInstance()
         val currentDay = calendar.get(Calendar.DAY_OF_MONTH).coerceAtLeast(1)
+        val currentMonthNum = calendar.get(Calendar.MONTH) + 1
+        val currentYearNum = calendar.get(Calendar.YEAR)
+        val daysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH).coerceAtLeast(28)
+        val daysRemaining = (daysInMonth - currentDay + 1).coerceAtLeast(1)
 
         // Month start
         calendar.set(Calendar.DAY_OF_MONTH, 1)
@@ -68,7 +79,32 @@ class ExpenditureWidget : GlanceAppWidget() {
             BigDecimal.ZERO
         }
 
-        val daysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH).coerceAtLeast(28)
+        val totalBudget = budgets
+            .filter { it.month == currentMonthNum && it.year == currentYearNum }
+            .fold(BigDecimal.ZERO) { acc, b -> acc.add(b.limitAmount) }
+
+        val safeDailySpend = if (totalBudget > BigDecimal.ZERO) {
+            totalBudget.subtract(monthlyExpense).divide(BigDecimal(daysRemaining), 0, RoundingMode.HALF_UP).coerceAtLeast(BigDecimal.ZERO)
+        } else if (monthlyIncome > BigDecimal.ZERO) {
+            monthlyIncome.subtract(monthlyExpense).divide(BigDecimal(daysRemaining), 0, RoundingMode.HALF_UP).coerceAtLeast(BigDecimal.ZERO)
+        } else {
+            BigDecimal.ZERO
+        }
+
+        val upcoming7DayBills = subscriptions.filter { sub ->
+            sub.isActive && (sub.dueDayOfMonth in currentDay..(currentDay + 7))
+        }
+        val upcomingBillsCount = upcoming7DayBills.size
+        val upcomingBillsTotal = upcoming7DayBills.fold(BigDecimal.ZERO) { acc, s -> acc.add(s.amount) }
+
+        val digest = DigestCalculator.calculateDigest(
+            transactions = transactions,
+            categories = categories,
+            budgets = budgets,
+            subscriptions = subscriptions,
+            savingGoals = savingGoals,
+            totalLiquidBalance = totalBalance
+        )
 
         val last7Days = (6 downTo 0).map { dayOffset ->
             val dCal = Calendar.getInstance().apply {
@@ -98,10 +134,17 @@ class ExpenditureWidget : GlanceAppWidget() {
                 netFlow = netFlow,
                 todayExpense = todayExpense,
                 dailyAverage = dailyAverage,
+                safeDailySpend = safeDailySpend,
                 pendingReviewCount = unreviewed.size,
+                upcomingBillsCount = upcomingBillsCount,
+                upcomingBillsTotal = upcomingBillsTotal,
                 currentDay = currentDay,
                 daysInMonth = daysInMonth,
-                normalized7Days = normalized7Days
+                healthStatusLabel = digest.healthStatus.label.uppercase(),
+                healthScore = digest.healthScore,
+                isOptimal = digest.healthStatus == HealthStatus.OPTIMAL,
+                normalized7Days = normalized7Days,
+                max7DaySpend = max7DaySpend
             )
         }
     }
@@ -113,24 +156,34 @@ class ExpenditureWidget : GlanceAppWidget() {
         netFlow: BigDecimal,
         todayExpense: BigDecimal,
         dailyAverage: BigDecimal,
+        safeDailySpend: BigDecimal,
         pendingReviewCount: Int,
+        upcomingBillsCount: Int,
+        upcomingBillsTotal: BigDecimal,
         currentDay: Int,
         daysInMonth: Int,
-        normalized7Days: List<Pair<String, Float>>
+        healthStatusLabel: String,
+        healthScore: Int,
+        isOptimal: Boolean,
+        normalized7Days: List<Pair<String, Float>>,
+        max7DaySpend: BigDecimal
     ) {
-        GlanceTheme {
-            Column(
-                modifier = GlanceModifier
-                    .fillMaxSize()
-                    .background(GlanceTheme.colors.surface)
-                    .padding(14.dp)
-                    .clickable(actionStartActivity<MainActivity>()),
-                verticalAlignment = Alignment.Top,
-                horizontalAlignment = Alignment.Start
+        Column(
+            modifier = GlanceModifier
+                .fillMaxSize()
+                .background(ImageProvider(R.drawable.glance_glass_card_bg))
+                .padding(14.dp)
+                .clickable(actionStartActivity<MainActivity>()),
+            verticalAlignment = Alignment.Top,
+            horizontalAlignment = Alignment.Start
+        ) {
+            // Header Bar: Title + Health Badge + Glassy Quick Add Button
+            Row(
+                modifier = GlanceModifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Header Bar with Quick Add Action
+                // Title Branding & Health Badge
                 Row(
-                    modifier = GlanceModifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
@@ -138,194 +191,263 @@ class ExpenditureWidget : GlanceAppWidget() {
                         style = TextStyle(
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = GlanceTheme.colors.primary
+                            color = ColorProvider(Color(0xFFF8FAFC))
+                        )
+                    )
+                    Spacer(modifier = GlanceModifier.width(6.dp))
+                    
+                    // Health Status Glass Pill
+                    Row(
+                        modifier = GlanceModifier
+                            .background(ImageProvider(if (isOptimal) R.drawable.glance_glass_badge_green else R.drawable.glance_glass_badge_amber))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "● $healthStatusLabel • $healthScore",
+                            style = TextStyle(
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = ColorProvider(if (isOptimal) Color(0xFF34D399) else Color(0xFFFBBF24))
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = GlanceModifier.defaultWeight())
+
+                // + Quick Add Glass Button
+                Row(
+                    modifier = GlanceModifier
+                        .background(ImageProvider(R.drawable.glance_glass_button_bg))
+                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                        .clickable(
+                            actionStartActivity<MainActivity>(
+                                actionParametersOf(QuickAddKey to "quick_add")
+                            )
+                        ),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "+ Quick Add",
+                        style = TextStyle(
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = ColorProvider(Color.White)
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = GlanceModifier.height(8.dp))
+
+            // Primary Hero: Balance & Net Flow Row
+            Row(
+                modifier = GlanceModifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Column(modifier = GlanceModifier.defaultWeight()) {
+                    Text(
+                        text = totalBalance.formatIndian(),
+                        style = TextStyle(
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = ColorProvider(Color.White)
+                        )
+                    )
+                    Text(
+                        text = "Net Liquid Balance",
+                        style = TextStyle(
+                            fontSize = 10.sp,
+                            color = ColorProvider(Color(0xFF94A3B8))
+                        )
+                    )
+                }
+
+                Column(horizontalAlignment = Alignment.End) {
+                    Row(
+                        modifier = GlanceModifier
+                            .background(ImageProvider(if (netFlow >= BigDecimal.ZERO) R.drawable.glance_glass_badge_green else R.drawable.glance_glass_badge_amber))
+                            .padding(horizontal = 8.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${if (netFlow >= BigDecimal.ZERO) "+" else ""}${netFlow.formatIndian()}",
+                            style = TextStyle(
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = ColorProvider(if (netFlow >= BigDecimal.ZERO) Color(0xFF34D399) else Color(0xFFF87171))
+                            )
+                        )
+                    }
+                    Spacer(modifier = GlanceModifier.height(2.dp))
+                    Text(
+                        text = "Net Flow",
+                        style = TextStyle(
+                            fontSize = 10.sp,
+                            color = ColorProvider(Color(0xFF94A3B8))
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = GlanceModifier.height(10.dp))
+
+            // 4-Metric Glass Bento Grid Container
+            Row(
+                modifier = GlanceModifier
+                    .fillMaxWidth()
+                    .background(ImageProvider(R.drawable.glance_glass_inner_box))
+                    .padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Today's Burn
+                Column(modifier = GlanceModifier.defaultWeight()) {
+                    Text(
+                        text = "Today's Burn",
+                        style = TextStyle(fontSize = 9.sp, color = ColorProvider(Color(0xFF94A3B8)))
+                    )
+                    Spacer(modifier = GlanceModifier.height(1.dp))
+                    Text(
+                        text = todayExpense.formatIndian(),
+                        style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, color = ColorProvider(Color.White))
+                    )
+                }
+
+                // Daily Avg
+                Column(modifier = GlanceModifier.defaultWeight()) {
+                    Text(
+                        text = "Daily Avg",
+                        style = TextStyle(fontSize = 9.sp, color = ColorProvider(Color(0xFF94A3B8)))
+                    )
+                    Spacer(modifier = GlanceModifier.height(1.dp))
+                    Text(
+                        text = "${dailyAverage.formatIndian()}/d",
+                        style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, color = ColorProvider(Color.White))
+                    )
+                }
+
+                // Safe Allowance
+                Column(modifier = GlanceModifier.defaultWeight()) {
+                    Text(
+                        text = "Safe/d",
+                        style = TextStyle(fontSize = 9.sp, color = ColorProvider(Color(0xFF94A3B8)))
+                    )
+                    Spacer(modifier = GlanceModifier.height(1.dp))
+                    Text(
+                        text = "${safeDailySpend.formatIndian()}/d",
+                        style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, color = ColorProvider(Color(0xFF34D399)))
+                    )
+                }
+
+                // Month Total
+                Column(modifier = GlanceModifier.defaultWeight(), horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "Month Total",
+                        style = TextStyle(fontSize = 9.sp, color = ColorProvider(Color(0xFF94A3B8)))
+                    )
+                    Spacer(modifier = GlanceModifier.height(1.dp))
+                    Text(
+                        text = monthlyExpense.formatIndian(),
+                        style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, color = ColorProvider(Color.White))
+                    )
+                }
+            }
+
+            Spacer(modifier = GlanceModifier.height(8.dp))
+
+            // 7-Day Outflow Trend & Pacing Card
+            Column(
+                modifier = GlanceModifier
+                    .fillMaxWidth()
+                    .background(ImageProvider(R.drawable.glance_glass_inner_box))
+                    .padding(8.dp)
+            ) {
+                Row(
+                    modifier = GlanceModifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "7-DAY OUTFLOW TREND",
+                        style = TextStyle(
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = ColorProvider(Color(0xFFCBD5E1))
                         )
                     )
                     Spacer(modifier = GlanceModifier.defaultWeight())
                     
-                    // + Quick Add button
-                    Row(
-                        modifier = GlanceModifier
-                            .background(GlanceTheme.colors.primary)
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                            .clickable(
-                                actionStartActivity<MainActivity>(
-                                    actionParametersOf(QuickAddKey to "quick_add")
-                                )
-                            ),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    if (pendingReviewCount > 0) {
                         Text(
-                            text = "+ Quick Add",
-                            style = TextStyle(
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = GlanceTheme.colors.onPrimary
-                            )
-                        )
-                    }
-                }
-
-                Spacer(modifier = GlanceModifier.height(8.dp))
-
-                // Balance & Net Flow Row
-                Row(
-                    modifier = GlanceModifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    Column(modifier = GlanceModifier.defaultWeight()) {
-                        Text(
-                            text = totalBalance.formatIndian(),
-                            style = TextStyle(
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = GlanceTheme.colors.onSurface
-                            )
-                        )
-                        Text(
-                            text = "Net Balance",
-                            style = TextStyle(
-                                fontSize = 10.sp,
-                                color = GlanceTheme.colors.onSurfaceVariant
-                            )
-                        )
-                    }
-
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            text = "${if (netFlow >= BigDecimal.ZERO) "+" else ""}${netFlow.formatIndian()}",
-                            style = TextStyle(
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (netFlow >= BigDecimal.ZERO)
-                                    ColorProvider(android.R.color.holo_green_light)
-                                else
-                                    ColorProvider(android.R.color.holo_red_light)
-                            )
-                        )
-                        Text(
-                            text = "Net Flow",
-                            style = TextStyle(
-                                fontSize = 10.sp,
-                                color = GlanceTheme.colors.onSurfaceVariant
-                            )
-                        )
-                    }
-                }
-
-                Spacer(modifier = GlanceModifier.height(10.dp))
-
-                // Daily Burn Rate Box
-                Row(
-                    modifier = GlanceModifier
-                        .fillMaxWidth()
-                        .background(GlanceTheme.colors.surfaceVariant)
-                        .padding(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = GlanceModifier.defaultWeight()) {
-                        Text(
-                            text = "Today's Burn",
-                            style = TextStyle(fontSize = 9.sp, color = GlanceTheme.colors.onSurfaceVariant)
-                        )
-                        Text(
-                            text = todayExpense.formatIndian(),
-                            style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onSurface)
-                        )
-                    }
-
-                    Column(modifier = GlanceModifier.defaultWeight()) {
-                        Text(
-                            text = "Daily Avg",
-                            style = TextStyle(fontSize = 9.sp, color = GlanceTheme.colors.onSurfaceVariant)
-                        )
-                        Text(
-                            text = "${dailyAverage.formatIndian()}/d",
-                            style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onSurface)
-                        )
-                    }
-
-                    Column(modifier = GlanceModifier.defaultWeight()) {
-                        Text(
-                            text = "Month Total",
-                            style = TextStyle(fontSize = 9.sp, color = GlanceTheme.colors.onSurfaceVariant)
-                        )
-                        Text(
-                            text = monthlyExpense.formatIndian(),
-                            style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, color = GlanceTheme.colors.onSurface)
-                        )
-                    }
-                }
-
-                Spacer(modifier = GlanceModifier.height(8.dp))
-
-                // Minimalist 7-Day Outflow Trend & Pacing Card for Widget
-                Column(
-                    modifier = GlanceModifier
-                        .fillMaxWidth()
-                        .background(GlanceTheme.colors.surfaceVariant)
-                        .padding(8.dp)
-                ) {
-                    Row(
-                        modifier = GlanceModifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "7-DAY OUTFLOW TREND",
+                            text = "📬 $pendingReviewCount Pending",
                             style = TextStyle(
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = GlanceTheme.colors.onSurfaceVariant
+                                color = ColorProvider(Color(0xFFFBBF24))
                             )
                         )
-                        Spacer(modifier = GlanceModifier.defaultWeight())
+                    } else if (upcomingBillsCount > 0) {
+                        Text(
+                            text = "📅 $upcomingBillsCount Bill (${upcomingBillsTotal.formatIndian()})",
+                            style = TextStyle(
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = ColorProvider(Color(0xFF818CF8))
+                            )
+                        )
+                    } else {
                         Text(
                             text = "Day $currentDay of $daysInMonth",
                             style = TextStyle(
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = GlanceTheme.colors.primary
+                                color = ColorProvider(Color(0xFF818CF8))
                             )
                         )
                     }
+                }
 
-                    Spacer(modifier = GlanceModifier.height(8.dp))
+                Spacer(modifier = GlanceModifier.height(6.dp))
 
-                    // Minimalist 7-Day Bars
-                    Row(
-                        modifier = GlanceModifier
-                            .fillMaxWidth()
-                            .height(34.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalAlignment = Alignment.Bottom
-                    ) {
-                        normalized7Days.forEachIndexed { index, pair ->
-                            val label = pair.first
-                            val ratio = pair.second
-                            val isToday = index == normalized7Days.lastIndex
-                            val barHeightDp = (ratio * 24).toInt().coerceIn(4, 24).dp
+                // 7-Day Micro Bars
+                Row(
+                    modifier = GlanceModifier
+                        .fillMaxWidth()
+                        .height(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    normalized7Days.forEachIndexed { index, pair ->
+                        val label = pair.first
+                        val ratio = pair.second
+                        val isToday = index == normalized7Days.lastIndex
+                        val barHeightDp = (ratio * 22).toInt().coerceIn(4, 22).dp
 
-                            Column(
-                                modifier = GlanceModifier.defaultWeight(),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalAlignment = Alignment.Bottom
-                            ) {
-                                Box(
-                                    modifier = GlanceModifier
-                                        .width(10.dp)
-                                        .height(barHeightDp)
-                                        .background(if (isToday) GlanceTheme.colors.primary else GlanceTheme.colors.outline)
-                                ) {}
-                                Spacer(modifier = GlanceModifier.height(3.dp))
-                                Text(
-                                    text = label,
-                                    style = TextStyle(
-                                        fontSize = 8.sp,
-                                        fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isToday) GlanceTheme.colors.primary else GlanceTheme.colors.onSurfaceVariant
+                        Column(
+                            modifier = GlanceModifier.defaultWeight(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalAlignment = Alignment.Bottom
+                        ) {
+                            Box(
+                                modifier = GlanceModifier
+                                    .width(8.dp)
+                                    .height(barHeightDp)
+                                    .background(
+                                        if (isToday)
+                                            ColorProvider(Color(0xFF818CF8))
+                                        else
+                                            ColorProvider(Color(0xFF475569))
                                     )
+                            ) {}
+                            Spacer(modifier = GlanceModifier.height(2.dp))
+                            Text(
+                                text = label,
+                                style = TextStyle(
+                                    fontSize = 8.sp,
+                                    fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isToday) ColorProvider(Color(0xFF818CF8)) else ColorProvider(Color(0xFF94A3B8))
                                 )
-                            }
+                            )
                         }
                     }
                 }

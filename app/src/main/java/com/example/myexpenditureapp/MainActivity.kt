@@ -291,7 +291,11 @@ fun MainScreen(shortcutAction: String? = null) {
                                 onEditAccount = { backStack.add(Route.AccountEdit(it.id)) },
                                 onReviewTransaction = { backStack.add(Route.TransactionReview(it.id)) },
                                 onOpenSmartInbox = { backStack.add(Route.SmartInbox) },
-                                onOpenGoals = { backStack.add(Route.GoalList) }
+                                onOpenGoals = { backStack.add(Route.GoalList) },
+                                onOpenTransactions = { backStack.add(Route.TransactionList) },
+                                onOpenSubscriptions = { backStack.add(Route.SubscriptionList) },
+                                onOpenBudgets = { backStack.add(Route.BudgetList) },
+                                onOpenAccounts = { backStack.add(Route.AccountList) }
                             )
                         }
                     entry<Route.AccountEdit>(
