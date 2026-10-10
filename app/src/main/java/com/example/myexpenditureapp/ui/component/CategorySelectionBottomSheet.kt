@@ -33,6 +33,10 @@ fun CategorySelectionBottomSheet(
         mutableStateOf(parent ?: rootCategories.firstOrNull()?.id)
     }
 
+    val activeParent = remember(categories, activeParentId) {
+        categories.find { it.id == activeParentId }
+    }
+
     val activeSubcategories = remember(categories, activeParentId) {
         if (activeParentId != null) {
             categories.filter { it.parentId == activeParentId }
@@ -85,9 +89,12 @@ fun CategorySelectionBottomSheet(
                         selected = isSelected,
                         onClick = {
                             activeParentId = rootCat.id
-                            onCategorySelected(rootCat.id)
+                            val hasSubcategories = categories.any { it.parentId == rootCat.id }
+                            if (!hasSubcategories) {
+                                onCategorySelected(rootCat.id)
+                            }
                         },
-                        label = { Text("${rootCat.icon} ${rootCat.name}", style = MaterialTheme.typography.labelMedium) },
+                        label = { Text("${rootCat.icon ?: ""} ${rootCat.name}", style = MaterialTheme.typography.labelMedium) },
                         shape = RoundedCornerShape(10.dp),
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -98,9 +105,9 @@ fun CategorySelectionBottomSheet(
             }
 
             // Tier 2: Subcategory Flow Matrix
-            if (activeSubcategories.isNotEmpty()) {
+            if (activeSubcategories.isNotEmpty() || activeParent != null) {
                 Text(
-                    text = "SPECIFIC SUBCATEGORY",
+                    text = "SPECIFIC SUBCATEGORY (${activeParent?.name ?: "All"})",
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 20.dp)
@@ -113,12 +120,26 @@ fun CategorySelectionBottomSheet(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    if (activeParent != null) {
+                        val isParentSelected = selectedCategoryId == activeParent.id
+                        FilterChip(
+                            selected = isParentSelected,
+                            onClick = { onCategorySelected(activeParent.id) },
+                            label = { Text("📌 All ${activeParent.name}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold) },
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isParentSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                            )
+                        )
+                    }
+
                     activeSubcategories.forEach { subCat ->
                         val isSubSelected = selectedCategoryId == subCat.id
                         FilterChip(
                             selected = isSubSelected,
                             onClick = { onCategorySelected(subCat.id) },
-                            label = { Text("${subCat.icon} ${subCat.name}", style = MaterialTheme.typography.bodySmall) },
+                            label = { Text("${subCat.icon ?: ""} ${subCat.name}", style = MaterialTheme.typography.bodySmall) },
                             shape = RoundedCornerShape(8.dp),
                             border = BorderStroke(
                                 1.dp,

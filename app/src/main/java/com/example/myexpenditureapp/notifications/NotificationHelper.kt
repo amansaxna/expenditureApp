@@ -53,7 +53,7 @@ object NotificationHelper {
             ).apply {
                 description = "Persistent ambient view of daily and monthly expenditure with quick shortcuts"
                 setShowBadge(false)
-                lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
             }
 
             val reviewChannel = NotificationChannel(

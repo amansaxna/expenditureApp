@@ -180,16 +180,20 @@ fun TransactionListScreen(
                     ) { }
                 }
 
+                val availableMonths by viewModel.availableMonths.collectAsStateWithLifecycle()
+
                 HorizontalMonthPicker(
                     selectedMonth = uiState.selectedMonth,
                     selectedYear = uiState.selectedYear,
+                    availableMonths = availableMonths,
                     onMonthSelected = { month, year -> viewModel.onMonthYearChange(month, year) }
                 )
 
                 MonthlySummaryBar(
                     income = uiState.totalIncome,
                     expense = uiState.totalExpense,
-                    net = uiState.netBalance
+                    net = uiState.netBalance,
+                    isYearly = uiState.selectedMonth == -1
                 )
                 
                 FilterChipsRow(
@@ -420,11 +424,52 @@ fun QuickEditBottomSheet(
             )
             Spacer(modifier = Modifier.height(12.dp))
 
-            CategoryTabSelector(
-                categories = categories,
-                selectedCategoryId = transaction.categoryId,
-                onCategorySelected = onUpdateCategory
-            )
+            val currentSelectedCat = categories.find { it.id == transaction.categoryId }
+            val currentParentCat = categories.find { it.id == currentSelectedCat?.parentId }
+            val quickCategoryText = when {
+                currentSelectedCat == null -> "None"
+                currentParentCat != null -> "${currentParentCat.icon ?: ""} ${currentParentCat.name} › ${currentSelectedCat.icon ?: ""} ${currentSelectedCat.name}".trim()
+                else -> "${currentSelectedCat.icon ?: ""} ${currentSelectedCat.name}".trim()
+            }
+            var showQuickCategorySheet by remember { mutableStateOf(false) }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showQuickCategorySheet = true }
+            ) {
+                OutlinedTextField(
+                    value = quickCategoryText,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Category & Subcategory") },
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = false,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                        disabledBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
+                    leadingIcon = { Icon(Icons.Default.Category, contentDescription = null) }
+                )
+            }
+
+            if (showQuickCategorySheet) {
+                CategorySelectionBottomSheet(
+                    categories = categories,
+                    selectedCategoryId = transaction.categoryId,
+                    onCategorySelected = {
+                        onUpdateCategory(it)
+                        showQuickCategorySheet = false
+                    },
+                    onAddNewCategory = { showQuickCategorySheet = false },
+                    onDismiss = { showQuickCategorySheet = false }
+                )
+            }
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
@@ -685,17 +730,16 @@ fun FilterChipsRow(
 fun HorizontalMonthPicker(
     selectedMonth: Int,
     selectedYear: Int,
+    availableMonths: List<Pair<Int, Int>> = emptyList(),
     onMonthSelected: (Int, Int) -> Unit
 ) {
-    val months = remember {
-        val list = mutableListOf<Pair<Int, Int>>()
-        val cal = Calendar.getInstance()
-        cal.add(Calendar.MONTH, -3)
-        repeat(7) {
-            list.add(cal.get(Calendar.MONTH) to cal.get(Calendar.YEAR))
-            cal.add(Calendar.MONTH, 1)
+    val monthsToDisplay = remember(availableMonths) {
+        if (availableMonths.isNotEmpty()) {
+            availableMonths
+        } else {
+            val now = Calendar.getInstance()
+            listOf(now.get(Calendar.MONTH) to now.get(Calendar.YEAR))
         }
-        list
     }
 
     LazyRow(
@@ -705,7 +749,32 @@ fun HorizontalMonthPicker(
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(months) { (month, year) ->
+        // Full Year Chip
+        item {
+            val isYearSelected = selectedMonth == -1
+            Surface(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onMonthSelected(-1, selectedYear) },
+                shape = RoundedCornerShape(12.dp),
+                color = if (isYearSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                border = BorderStroke(
+                    1.dp, 
+                    if (isYearSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                )
+            ) {
+                Text(
+                    text = "🗓️ All $selectedYear",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = if (isYearSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                    color = if (isYearSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                )
+            }
+        }
+
+        // Available Months with Data
+        items(monthsToDisplay) { (month, year) ->
             val isSelected = month == selectedMonth && year == selectedYear
             val cal = Calendar.getInstance().apply {
                 set(Calendar.MONTH, month)
@@ -740,7 +809,8 @@ fun HorizontalMonthPicker(
 fun MonthlySummaryBar(
     income: BigDecimal,
     expense: BigDecimal,
-    net: BigDecimal
+    net: BigDecimal,
+    isYearly: Boolean = false
 ) {
     Card(
         modifier = Modifier
@@ -760,7 +830,7 @@ fun MonthlySummaryBar(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             CompactSummaryItem(
-                label = "Income", 
+                label = if (isYearly) "Annual In" else "Income", 
                 amount = income, 
                 color = IncomeGreen,
                 icon = Icons.AutoMirrored.Filled.TrendingUp
@@ -773,7 +843,7 @@ fun MonthlySummaryBar(
             )
 
             CompactSummaryItem(
-                label = "Expense", 
+                label = if (isYearly) "Annual Out" else "Expense", 
                 amount = expense, 
                 color = ExpenseRed,
                 icon = Icons.AutoMirrored.Filled.TrendingDown
@@ -786,7 +856,7 @@ fun MonthlySummaryBar(
             )
 
             CompactSummaryItem(
-                label = "Net", 
+                label = if (isYearly) "Annual Net" else "Net", 
                 amount = net, 
                 color = if (net >= BigDecimal.ZERO) IncomeGreen else ExpenseRed,
                 icon = Icons.Default.AccountBalanceWallet
@@ -1247,29 +1317,39 @@ fun TransactionEditScreen(
 
             // Category Selection (Bottom Sheet)
             val selectedCategory = categories.find { it.id == categoryId }
+            val parentCategory = selectedCategory?.parentId?.let { pId -> categories.find { it.id == pId } }
+            val categoryDisplayText = when {
+                selectedCategory == null -> "None"
+                parentCategory != null -> "${parentCategory.icon ?: ""} ${parentCategory.name} › ${selectedCategory.icon ?: ""} ${selectedCategory.name}".trim()
+                else -> "${selectedCategory.icon ?: ""} ${selectedCategory.name}".trim()
+            }
             var showCategorySheet by remember { mutableStateOf(false) }
             val categorySheetState = rememberModalBottomSheetState()
 
-            OutlinedTextField(
-                value = selectedCategory?.let { "${it.name} ${it.icon ?: ""}".trim() } ?: "None",
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Category") },
-                shape = RoundedCornerShape(14.dp),
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { showCategorySheet = true },
-                enabled = false,
-                colors = OutlinedTextFieldDefaults.colors(
-                    disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                    disabledBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                    disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
-                leadingIcon = { Icon(Icons.Default.Category, contentDescription = null) }
-            )
+                    .clickable { showCategorySheet = true }
+            ) {
+                OutlinedTextField(
+                    value = categoryDisplayText,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Category & Subcategory") },
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = false,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                        disabledBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
+                    leadingIcon = { Icon(Icons.Default.Category, contentDescription = null) }
+                )
+            }
 
             if (showCategorySheet) {
                 CategorySelectionBottomSheet(
@@ -1756,18 +1836,54 @@ fun TransactionReviewScreen(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            Text(
-                "Assign Category",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.align(Alignment.Start)
-            )
+            val selectedCategory = categories.find { it.id == selectedCategoryId }
+            val parentCategory = categories.find { it.id == selectedCategory?.parentId }
+            val categoryDisplayText = when {
+                selectedCategory == null -> "None"
+                parentCategory != null -> "${parentCategory.icon ?: ""} ${parentCategory.name} › ${selectedCategory.icon ?: ""} ${selectedCategory.name}".trim()
+                else -> "${selectedCategory.icon ?: ""} ${selectedCategory.name}".trim()
+            }
+            var showCategorySheet by remember { mutableStateOf(false) }
 
-            CategoryTabSelector(
-                categories = categories,
-                selectedCategoryId = selectedCategoryId,
-                onCategorySelected = { selectedCategoryId = it }
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showCategorySheet = true }
+            ) {
+                OutlinedTextField(
+                    value = categoryDisplayText,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Category & Subcategory") },
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = false,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                        disabledBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
+                    leadingIcon = { Icon(Icons.Default.Category, contentDescription = null) }
+                )
+            }
+
+            if (showCategorySheet) {
+                CategorySelectionBottomSheet(
+                    categories = categories,
+                    selectedCategoryId = selectedCategoryId,
+                    onCategorySelected = {
+                        selectedCategoryId = it
+                        showCategorySheet = false
+                    },
+                    onAddNewCategory = {
+                        showCategorySheet = false
+                    },
+                    onDismiss = { showCategorySheet = false }
+                )
+            }
 
             if (selectedCategoryId != null) {
                 val cat = categories.find { it.id == selectedCategoryId }

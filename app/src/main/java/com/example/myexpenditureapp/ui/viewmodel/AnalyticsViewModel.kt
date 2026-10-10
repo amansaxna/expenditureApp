@@ -34,6 +34,18 @@ data class DrillNode(
     val merchant: String? = null
 )
 
+data class YearlySummary(
+    val year: Int,
+    val totalExpense: BigDecimal,
+    val totalIncome: BigDecimal,
+    val netSavings: BigDecimal,
+    val savingsRate: Int,
+    val averageMonthlyExpense: BigDecimal,
+    val topCategory: String,
+    val transactionCount: Int,
+    val monthlyBreakdown: Map<Int, BigDecimal>
+)
+
 data class AnalyticsUiState(
     val selectedAccountId: Long? = null,
     val selectedCategoryId: Long? = null,
@@ -68,8 +80,96 @@ class AnalyticsViewModel : ViewModel() {
     val budgets: StateFlow<List<com.example.myexpenditureapp.data.entity.Budget>> = budgetRepository.getAllBudgets()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val insights: Flow<List<SmartInsight>> = combine(transactions, categories, budgets, accounts) { txs, cats, buds, accs ->
-        InsightsEngine.generateInsights(txs, cats, buds, accs)
+    val availableMonths: Flow<List<Int>> = combine(transactions, _filterState) { txs, filters ->
+        val cal = Calendar.getInstance()
+        val monthsWithData = txs.filter { tx ->
+            cal.timeInMillis = tx.timestamp
+            cal.get(Calendar.YEAR) == filters.year
+        }.map { tx ->
+            cal.timeInMillis = tx.timestamp
+            cal.get(Calendar.MONTH) + 1
+        }.toSet()
+
+        val currentCal = Calendar.getInstance()
+        val currentMonth = if (filters.year == currentCal.get(Calendar.YEAR)) currentCal.get(Calendar.MONTH) + 1 else null
+
+        val result = mutableListOf(0) // 0 = All-Time
+        (1..12).filter { it in monthsWithData || it == currentMonth }.forEach {
+            result.add(it)
+        }
+        result
+    }
+
+    val availableYears: Flow<List<Int>> = transactions.map { txs ->
+        val cal = Calendar.getInstance()
+        val years = txs.map {
+            cal.timeInMillis = it.timestamp
+            cal.get(Calendar.YEAR)
+        }.toSet().toMutableList()
+        val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+        if (!years.contains(currentYear)) years.add(currentYear)
+        years.sortedDescending()
+    }
+
+    val yearlySummary: Flow<YearlySummary?> = combine(transactions, categories, _filterState) { txs, cats, filters ->
+        val targetYear = filters.year
+        val cal = Calendar.getInstance()
+        val yearTxs = txs.filter { tx ->
+            cal.timeInMillis = tx.timestamp
+            cal.get(Calendar.YEAR) == targetYear
+        }
+
+        if (yearTxs.isEmpty()) {
+            null
+        } else {
+            val yearExpenses = yearTxs.filter { it.type == "Expense" }
+            val yearIncome = yearTxs.filter { it.type == "Income" }
+
+            val totalExpense = yearExpenses.fold(BigDecimal.ZERO) { acc, t -> acc.add(t.amount) }
+            val totalIncome = yearIncome.fold(BigDecimal.ZERO) { acc, t -> acc.add(t.amount) }
+            val netSavings = totalIncome.subtract(totalExpense)
+
+            val savingsRate = if (totalIncome > BigDecimal.ZERO) {
+                netSavings.divide(totalIncome, 4, RoundingMode.HALF_UP).multiply(BigDecimal(100)).toInt()
+            } else 0
+
+            val monthlyBreakdown = mutableMapOf<Int, BigDecimal>()
+            for (m in 1..12) {
+                monthlyBreakdown[m] = BigDecimal.ZERO
+            }
+            yearExpenses.forEach { tx ->
+                cal.timeInMillis = tx.timestamp
+                val m = cal.get(Calendar.MONTH) + 1
+                monthlyBreakdown[m] = (monthlyBreakdown[m] ?: BigDecimal.ZERO).add(tx.amount)
+            }
+
+            val activeMonthsCount = monthlyBreakdown.values.count { it > BigDecimal.ZERO }.coerceAtLeast(1)
+            val avgMonthlyExpense = totalExpense.divide(BigDecimal(activeMonthsCount), 0, RoundingMode.HALF_UP)
+
+            val catMap = cats.associateBy { it.id }
+            val topCategory = yearExpenses.groupBy { it.categoryId }
+                .mapValues { it.value.fold(BigDecimal.ZERO) { acc, t -> acc.add(t.amount) } }
+                .maxByOrNull { it.value }
+                ?.let { catMap[it.key]?.name ?: "General" } ?: "None"
+
+            YearlySummary(
+                year = targetYear,
+                totalExpense = totalExpense,
+                totalIncome = totalIncome,
+                netSavings = netSavings,
+                savingsRate = savingsRate,
+                averageMonthlyExpense = avgMonthlyExpense,
+                topCategory = topCategory,
+                transactionCount = yearTxs.size,
+                monthlyBreakdown = monthlyBreakdown
+            )
+        }
+    }
+
+    val insights: Flow<List<SmartInsight>> = combine(transactions, categories, budgets, accounts, _filterState) { txs, cats, buds, accs, filters ->
+        val monthlyInsights = InsightsEngine.generateInsights(txs, cats, buds, accs)
+        val yearlyInsights = InsightsEngine.generateYearlyInsights(txs, cats, filters.year)
+        (yearlyInsights + monthlyInsights).distinctBy { it.id }
     }
 
     val filteredTransactions = combine(transactions, _filterState) { txs, filters ->

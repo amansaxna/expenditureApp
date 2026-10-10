@@ -55,12 +55,54 @@ object DataSeeder {
                     categoryDao.insertCategory(Category(name = "Dividends", parentId = it, icon = "📈"))
                 }
                 personalId?.let { categoryDao.insertCategory(Category(name = "Gym", parentId = it, icon = "🏋️‍♂️")) }
-            } else {
-                val hasMisc = existingCategories.any { it.name.equals("Miscellaneous", ignoreCase = true) || it.name.equals("Misc", ignoreCase = true) }
-                if (!hasMisc) {
-                    categoryDao.insertCategory(Category(name = "Miscellaneous", icon = "📦"))
+            }
+
+            // Ensure rich subcategories exist for all root categories even on existing database installs
+            val allCurrentCategories = categoryDao.getAllCategoriesList()
+            val existingNames = allCurrentCategories.map { it.name.lowercase() }.toSet()
+            val parentMap = allCurrentCategories.filter { it.parentId == null }.associateBy { it.name.lowercase() }
+
+            suspend fun addSubIfMissing(parentName: String, subName: String, icon: String) {
+                val parent = parentMap[parentName.lowercase()]
+                if (parent != null && !existingNames.contains(subName.lowercase())) {
+                    categoryDao.insertCategory(Category(name = subName, parentId = parent.id, icon = icon))
                 }
             }
+
+            addSubIfMissing("Housing", "Rent", "🏠")
+            addSubIfMissing("Housing", "Utilities", "⚡")
+            addSubIfMissing("Housing", "Maintenance", "🔧")
+
+            addSubIfMissing("Food & Dining", "Groceries", "🛒")
+            addSubIfMissing("Food & Dining", "Restaurants", "🍔")
+            addSubIfMissing("Food & Dining", "Cafes", "☕")
+            addSubIfMissing("Food & Dining", "Food Delivery", "🛵")
+
+            addSubIfMissing("Transportation", "Fuel", "⛽")
+            addSubIfMissing("Transportation", "Public Transit", "🚌")
+            addSubIfMissing("Transportation", "Cabs & Taxis", "🚕")
+
+            addSubIfMissing("Personal Care", "Gym", "🏋️‍♂️")
+            addSubIfMissing("Personal Care", "Salon & Grooming", "✂️")
+            addSubIfMissing("Personal Care", "Healthcare", "💊")
+
+            addSubIfMissing("Entertainment", "Movies", "🍿")
+            addSubIfMissing("Entertainment", "Streaming", "📺")
+            addSubIfMissing("Entertainment", "Gaming", "🎮")
+
+            addSubIfMissing("Shopping", "Clothing", "👕")
+            addSubIfMissing("Shopping", "Electronics", "📱")
+            addSubIfMissing("Shopping", "Online Shopping", "📦")
+
+            addSubIfMissing("Finance", "Salary", "💰")
+            addSubIfMissing("Finance", "Investments", "📈")
+            addSubIfMissing("Finance", "Dividends", "🪙")
+
+            addSubIfMissing("Education", "Courses", "🎓")
+            addSubIfMissing("Education", "Books", "📚")
+
+            addSubIfMissing("Miscellaneous", "General", "📦")
+            addSubIfMissing("Miscellaneous", "Fees & Charges", "🧾")
         }
     }
 

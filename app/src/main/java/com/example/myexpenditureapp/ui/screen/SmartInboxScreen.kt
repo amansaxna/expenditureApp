@@ -26,7 +26,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.myexpenditureapp.data.entity.Category
 import com.example.myexpenditureapp.data.entity.Transaction
+import com.example.myexpenditureapp.ui.component.CategorySelectionBottomSheet
 import com.example.myexpenditureapp.ui.theme.*
 import com.example.myexpenditureapp.ui.viewmodel.TransactionViewModel
 import com.example.myexpenditureapp.utils.formatIndian
@@ -42,11 +44,13 @@ fun SmartInboxScreen(
     onBack: () -> Unit
 ) {
     val unreviewedTransactions by viewModel.unreviewedTransactions.collectAsStateWithLifecycle()
+    val categories by viewModel.categories.collectAsStateWithLifecycle()
     val haptic = LocalHapticFeedback.current
 
     var searchQuery by remember { mutableStateOf("") }
     var showDismissAllDialog by remember { mutableStateOf(false) }
     var showApproveAllDialog by remember { mutableStateOf(false) }
+    var transactionForCategorySheet by remember { mutableStateOf<Transaction?>(null) }
 
     val filteredList = remember(unreviewedTransactions, searchQuery) {
         if (searchQuery.isBlank()) {
@@ -107,6 +111,24 @@ fun SmartInboxScreen(
                 TextButton(onClick = { showApproveAllDialog = false }) {
                     Text("Cancel")
                 }
+            }
+        )
+    }
+
+    if (transactionForCategorySheet != null) {
+        val targetTx = transactionForCategorySheet!!
+        CategorySelectionBottomSheet(
+            categories = categories,
+            selectedCategoryId = targetTx.categoryId,
+            onCategorySelected = { catId ->
+                viewModel.updateTransactionCategory(targetTx, catId)
+                transactionForCategorySheet = null
+            },
+            onAddNewCategory = {
+                transactionForCategorySheet = null
+            },
+            onDismiss = {
+                transactionForCategorySheet = null
             }
         )
     }
@@ -334,6 +356,7 @@ fun SmartInboxScreen(
                 items(filteredList, key = { it.id }) { transaction ->
                     SwipeablePendingTransactionItem(
                         transaction = transaction,
+                        categories = categories,
                         onMarkAsReviewed = {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             viewModel.markAsReviewed(transaction.id)
@@ -342,7 +365,8 @@ fun SmartInboxScreen(
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             viewModel.deleteTransaction(transaction)
                         },
-                        onReviewDetail = { onReviewTransaction(transaction) }
+                        onReviewDetail = { onReviewTransaction(transaction) },
+                        onQuickCategorize = { transactionForCategorySheet = transaction }
                     )
                 }
             }
@@ -354,9 +378,11 @@ fun SmartInboxScreen(
 @Composable
 fun SwipeablePendingTransactionItem(
     transaction: Transaction,
+    categories: List<Category> = emptyList(),
     onMarkAsReviewed: () -> Unit,
     onDeleteUnreviewed: () -> Unit,
     onReviewDetail: () -> Unit,
+    onQuickCategorize: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     key(transaction.id) {
@@ -499,9 +525,37 @@ fun SwipeablePendingTransactionItem(
                         )
                         Text("•", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outlineVariant)
                         Text(
-                            "${transaction.amount.formatIndian()} • Tap to assign category",
+                            transaction.amount.formatIndian(),
                             style = MaterialTheme.typography.labelSmall.copy(fontFamily = MonospaceFont),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(3.dp))
+                    val assignedCat = categories.find { it.id == transaction.categoryId }
+                    val parentCat = categories.find { it.id == assignedCat?.parentId }
+                    val catLabel = when {
+                        assignedCat == null -> "+ Assign Category & Subcategory"
+                        parentCat != null -> "${parentCat.icon ?: ""} ${parentCat.name} › ${assignedCat.icon ?: ""} ${assignedCat.name}".trim()
+                        else -> "${assignedCat.icon ?: ""} ${assignedCat.name}".trim()
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (assignedCat != null) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surfaceVariant,
+                        border = BorderStroke(1.dp, if (assignedCat != null) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        modifier = Modifier.clickable {
+                            if (onQuickCategorize != null) {
+                                onQuickCategorize()
+                            } else {
+                                onReviewDetail()
+                            }
+                        }
+                    ) {
+                        Text(
+                            text = catLabel,
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = if (assignedCat != null) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
                     if (!transaction.rawMessage.isNullOrBlank()) {

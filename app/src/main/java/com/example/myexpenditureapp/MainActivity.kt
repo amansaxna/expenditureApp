@@ -300,6 +300,7 @@ fun MainScreen(shortcutAction: String? = null) {
                                 onOpenTransactions = { backStack.add(Route.TransactionList) },
                                 onOpenSubscriptions = { backStack.add(Route.SubscriptionList) },
                                 onOpenBudgets = { backStack.add(Route.BudgetList) },
+                                onEditBudget = { backStack.add(Route.BudgetEdit(it)) },
                                 onOpenAccounts = { backStack.add(Route.AccountList) }
                             )
                         }

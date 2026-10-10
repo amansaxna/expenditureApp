@@ -310,4 +310,107 @@ object InsightsEngine {
 
         return insights
     }
+
+    fun generateYearlyInsights(
+        transactions: List<Transaction>,
+        categories: List<Category>,
+        targetYear: Int
+    ): List<SmartInsight> {
+        val cal = Calendar.getInstance()
+        val yearTxs = transactions.filter { tx ->
+            cal.timeInMillis = tx.timestamp
+            cal.get(Calendar.YEAR) == targetYear
+        }
+
+        if (yearTxs.isEmpty()) return emptyList()
+
+        val insights = mutableListOf<SmartInsight>()
+        val categoryMap = categories.associateBy { it.id }
+
+        val yearExpenses = yearTxs.filter { it.type == "Expense" }
+        val yearIncome = yearTxs.filter { it.type == "Income" }
+
+        val totalExpense = yearExpenses.fold(BigDecimal.ZERO) { acc, t -> acc.add(t.amount) }
+        val totalIncome = yearIncome.fold(BigDecimal.ZERO) { acc, t -> acc.add(t.amount) }
+
+        // 1. Annual Savings Rate
+        if (totalIncome > BigDecimal.ZERO) {
+            val netSavings = totalIncome.subtract(totalExpense)
+            val savingsRate = netSavings.divide(totalIncome, 4, RoundingMode.HALF_UP).multiply(BigDecimal(100)).toInt()
+            if (savingsRate >= 20) {
+                insights.add(
+                    SmartInsight(
+                        id = "yearly_savings_rate_${targetYear}",
+                        title = "$targetYear Annual Savings: $savingsRate%",
+                        description = "You retained ${netSavings.formatIndian()} ($savingsRate%) of total logged income across $targetYear.",
+                        icon = "savings",
+                        type = InsightType.POSITIVE,
+                        metric = "$savingsRate% Saved",
+                        drillDownType = "Income"
+                    )
+                )
+            } else if (savingsRate < 0) {
+                insights.add(
+                    SmartInsight(
+                        id = "yearly_deficit_${targetYear}",
+                        title = "$targetYear Annual Deficit Warning",
+                        description = "Total expenses outpaced income by ${netSavings.abs().formatIndian()} in $targetYear.",
+                        icon = "alert",
+                        type = InsightType.WARNING,
+                        metric = "-${netSavings.abs().formatIndian()}",
+                        drillDownType = "Expense"
+                    )
+                )
+            }
+        }
+
+        // 2. Top Category of the Year
+        val topCategoryEntry = yearExpenses
+            .filter { it.categoryId != null }
+            .groupBy { it.categoryId!! }
+            .maxByOrNull { entry -> entry.value.fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) } }
+
+        if (topCategoryEntry != null) {
+            val catTotal = topCategoryEntry.value.fold(BigDecimal.ZERO) { acc, tx -> acc.add(tx.amount) }
+            val catName = categoryMap[topCategoryEntry.key]?.name ?: "General"
+            val catIcon = categoryMap[topCategoryEntry.key]?.icon ?: "📊"
+            val catPct = if (totalExpense > BigDecimal.ZERO) {
+                catTotal.divide(totalExpense, 4, RoundingMode.HALF_UP).multiply(BigDecimal(100)).toInt()
+            } else 0
+
+            insights.add(
+                SmartInsight(
+                    id = "yearly_top_category_${targetYear}",
+                    title = "$targetYear Top Expense: $catName",
+                    description = "$catIcon $catName took ${catTotal.formatIndian()} ($catPct%) of your annual outflow in $targetYear.",
+                    icon = "category",
+                    type = InsightType.NEUTRAL,
+                    metric = "$catPct% ($targetYear)",
+                    drillDownCategoryId = topCategoryEntry.key
+                )
+            )
+        }
+
+        // 3. Annual Spend Run-rate / Pace
+        val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+        if (targetYear == currentYear && totalExpense > BigDecimal.ZERO) {
+            val currentDayOfYear = Calendar.getInstance().get(Calendar.DAY_OF_YEAR).coerceAtLeast(1)
+            val totalDaysInYear = if (Calendar.getInstance().getActualMaximum(Calendar.DAY_OF_YEAR) > 365) 366 else 365
+            val projectedYearSpend = totalExpense.divide(BigDecimal(currentDayOfYear), 2, RoundingMode.HALF_UP).multiply(BigDecimal(totalDaysInYear))
+
+            insights.add(
+                SmartInsight(
+                    id = "yearly_projected_spend_${targetYear}",
+                    title = "Annual Spend Run-Rate",
+                    description = "At your current pace of ${totalExpense.formatIndian()} YTD, projected full-year outflow is ${projectedYearSpend.formatIndian()}.",
+                    icon = "trending",
+                    type = InsightType.TIP,
+                    metric = projectedYearSpend.formatIndian()
+                )
+            )
+        }
+
+        return insights
+    }
 }
+

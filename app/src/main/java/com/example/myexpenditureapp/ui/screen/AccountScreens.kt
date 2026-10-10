@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import com.example.myexpenditureapp.data.entity.Category
 import java.util.Calendar
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,6 +77,7 @@ fun AccountListScreen(
     onOpenTransactions: () -> Unit = {},
     onOpenSubscriptions: () -> Unit = {},
     onOpenBudgets: () -> Unit = {},
+    onEditBudget: (Long) -> Unit = {},
     onOpenAccounts: () -> Unit = {},
     settlementViewModel: com.example.myexpenditureapp.ui.viewmodel.MonthlySettlementViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
@@ -383,6 +385,7 @@ fun AccountListScreen(
                 item {
                     ToReviewSection(
                         transactions = unreviewedTransactions,
+                        categories = categories,
                         onMarkAsReviewed = { transactionViewModel.markAsReviewed(it.id) },
                         onDeleteUnreviewed = { transactionViewModel.deleteTransaction(it) },
                         onClearAllUnreviewed = { transactionViewModel.deleteAllUnreviewedTransactions() },
@@ -392,8 +395,33 @@ fun AccountListScreen(
                 }
             }
 
-            item {
-                CircularBudgetsRow(budgetsWithProgress)
+            // CATEGORY BUDGETS (Monthly Limits)
+            if (budgetsWithProgress.isNotEmpty()) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "CATEGORY BUDGETS",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            letterSpacing = 0.5.sp
+                        )
+                        TextButton(onClick = onOpenBudgets) {
+                            Text("Manage", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+
+                    CircularBudgetsRow(
+                        budgets = budgetsWithProgress,
+                        onBudgetClick = { budget -> onEditBudget(budget.id) }
+                    )
+                }
             }
 
             item {
@@ -620,6 +648,7 @@ fun DashboardPacedHeroCard(
 @Composable
 fun ToReviewSection(
     transactions: List<Transaction>,
+    categories: List<Category> = emptyList(),
     onMarkAsReviewed: (Transaction) -> Unit,
     onDeleteUnreviewed: (Transaction) -> Unit,
     onClearAllUnreviewed: () -> Unit,
@@ -720,6 +749,7 @@ fun ToReviewSection(
             key(transaction.id) {
                 SwipeablePendingTransactionItem(
                     transaction = transaction,
+                    categories = categories,
                     onMarkAsReviewed = { onMarkAsReviewed(transaction) },
                     onDeleteUnreviewed = { onDeleteUnreviewed(transaction) },
                     onReviewDetail = { onReviewDetail(transaction) }
@@ -730,51 +760,91 @@ fun ToReviewSection(
 }
 
 @Composable
-fun CircularBudgetsRow(budgets: List<BudgetWithProgress>) {
+fun CircularBudgetsRow(
+    budgets: List<BudgetWithProgress>,
+    onBudgetClick: (com.example.myexpenditureapp.data.entity.Budget) -> Unit = {}
+) {
+    val haptic = LocalHapticFeedback.current
     LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(vertical = 8.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(horizontal = 2.dp, vertical = 6.dp)
     ) {
-        items(budgets) { budgetProgress ->
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(80.dp)) {
-                    CircularProgressIndicator(
-                        progress = { budgetProgress.progress.coerceIn(0f, 1f) },
-                        modifier = Modifier.fillMaxSize(),
-                        color = if (budgetProgress.progress > 1f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                        strokeWidth = 6.dp
-                    )
-                    if (budgetProgress.category?.icon != null) {
-                        Text(
-                            text = budgetProgress.category.icon,
-                            fontSize = 24.sp
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Category,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
+        items(budgets, key = { it.budget.id }) { budgetProgress ->
+            val interactionSource = remember { MutableInteractionSource() }
+            val isPressed by interactionSource.collectIsPressedAsState()
+            val scale by animateFloatAsState(
+                targetValue = if (isPressed) 0.95f else 1.0f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                ),
+                label = "budgetPressScale"
+            )
+
+            Card(
+                modifier = Modifier
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
                     }
+                    .clip(RoundedCornerShape(18.dp))
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = ripple()
+                    ) {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onBudgetClick(budgetProgress.budget)
+                    },
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(14.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(76.dp)) {
+                        CircularProgressIndicator(
+                            progress = { budgetProgress.progress.coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxSize(),
+                            color = if (budgetProgress.progress > 1f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                            strokeWidth = 6.dp
+                        )
+                        if (budgetProgress.category?.icon != null) {
+                            Text(
+                                text = budgetProgress.category.icon,
+                                fontSize = 24.sp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Category,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = budgetProgress.category?.name ?: "Other",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        maxLines = 1
+                    )
+                    val left = budgetProgress.budget.limitAmount.subtract(budgetProgress.currentSpending)
+                    Text(
+                        text = if (left >= BigDecimal.ZERO) "${left.formatIndian(includeSymbol = true)} left" 
+                               else "${left.negate().formatIndian(includeSymbol = true)} over",
+                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = MonospaceFont, fontSize = 11.sp),
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (left >= BigDecimal.ZERO) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
                 }
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = budgetProgress.category?.name ?: "Other",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    maxLines = 1
-                )
-                val left = budgetProgress.budget.limitAmount.subtract(budgetProgress.currentSpending)
-                Text(
-                    text = if (left >= BigDecimal.ZERO) "${left.formatIndian(includeSymbol = true)} left" 
-                           else "${left.negate().formatIndian(includeSymbol = true)} over",
-                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = MonospaceFont, fontSize = 10.sp),
-                    color = if (left >= BigDecimal.ZERO) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
             }
         }
     }

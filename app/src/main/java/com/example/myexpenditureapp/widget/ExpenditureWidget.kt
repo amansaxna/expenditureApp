@@ -31,6 +31,8 @@ private val QuickAddKey = ActionParameters.Key<String>("ACTION")
 
 class ExpenditureWidget : GlanceAppWidget() {
 
+    override val sizeMode: SizeMode = SizeMode.Exact
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         Graph.provide(context)
         

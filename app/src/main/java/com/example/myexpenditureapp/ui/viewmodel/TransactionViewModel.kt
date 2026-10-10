@@ -77,6 +77,27 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
             initialValue = emptyList()
         )
 
+    val availableMonths: StateFlow<List<Pair<Int, Int>>> = allTransactions.map { txs ->
+        val cal = Calendar.getInstance()
+        val set = txs.map { tx ->
+            cal.timeInMillis = tx.timestamp
+            cal.get(Calendar.MONTH) to cal.get(Calendar.YEAR)
+        }.toMutableSet()
+        val now = Calendar.getInstance()
+        set.add(now.get(Calendar.MONTH) to now.get(Calendar.YEAR))
+        set.sortedWith(compareBy<Pair<Int, Int>> { it.second }.thenBy { it.first })
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val availableYears: StateFlow<List<Int>> = allTransactions.map { txs ->
+        val cal = Calendar.getInstance()
+        val set = txs.map { tx ->
+            cal.timeInMillis = tx.timestamp
+            cal.get(Calendar.YEAR)
+        }.toMutableSet()
+        set.add(Calendar.getInstance().get(Calendar.YEAR))
+        set.sortedDescending()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     private val _eventFlow = MutableSharedFlow<UiEvent>()
     val eventFlow = _eventFlow.asSharedFlow()
 
@@ -93,16 +114,26 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
         val (month, year) = dateParams
         
         val cal = Calendar.getInstance()
-        cal.set(year, month, 1, 0, 0, 0)
-        cal.set(Calendar.MILLISECOND, 0)
-        val startDate = cal.timeInMillis
-        
-        cal.set(Calendar.DAY_OF_MONTH, cal.getActualMaximum(Calendar.DAY_OF_MONTH))
-        cal.set(Calendar.HOUR_OF_DAY, 23)
-        cal.set(Calendar.MINUTE, 59)
-        cal.set(Calendar.SECOND, 59)
-        cal.set(Calendar.MILLISECOND, 999)
-        val endDate = cal.timeInMillis
+        val startDate: Long
+        val endDate: Long
+        if (month == -1) {
+            cal.set(year, Calendar.JANUARY, 1, 0, 0, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            startDate = cal.timeInMillis
+            cal.set(year, Calendar.DECEMBER, 31, 23, 59, 59)
+            cal.set(Calendar.MILLISECOND, 999)
+            endDate = cal.timeInMillis
+        } else {
+            cal.set(year, month, 1, 0, 0, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            startDate = cal.timeInMillis
+            cal.set(Calendar.DAY_OF_MONTH, cal.getActualMaximum(Calendar.DAY_OF_MONTH))
+            cal.set(Calendar.HOUR_OF_DAY, 23)
+            cal.set(Calendar.MINUTE, 59)
+            cal.set(Calendar.SECOND, 59)
+            cal.set(Calendar.MILLISECOND, 999)
+            endDate = cal.timeInMillis
+        }
 
         transactionRepository.getFilteredTransactions(
             accountId = accId,
@@ -150,6 +181,13 @@ class TransactionViewModel(application: Application) : AndroidViewModel(applicat
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = TransactionUiState(isLoading = true)
     )
+
+    val categories: StateFlow<List<Category>> = getCategoriesUseCase.getAll()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 
     fun onSearchQueryChange(query: String) {
         _searchQuery.value = query

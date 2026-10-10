@@ -63,6 +63,9 @@ fun AnalyticsScreen(
 
     val unsettledSummary by settlementViewModel.unsettledMonthSummary.collectAsStateWithLifecycle()
     val isSettlementSheetVisible by settlementViewModel.isBottomSheetVisible.collectAsStateWithLifecycle()
+    val availableMonths by viewModel.availableMonths.collectAsStateWithLifecycle(initialValue = emptyList())
+    val availableYears by viewModel.availableYears.collectAsStateWithLifecycle(initialValue = emptyList())
+    val yearlySummary by viewModel.yearlySummary.collectAsStateWithLifecycle(initialValue = null)
     val activeGoals by settlementViewModel.activeGoals.collectAsStateWithLifecycle()
 
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -123,6 +126,8 @@ fun AnalyticsScreen(
                 AnalyticsMonthPicker(
                     selectedMonth = filterState.month,
                     selectedYear = filterState.year,
+                    availableMonths = availableMonths,
+                    availableYears = availableYears,
                     onMonthYearSelected = { m, y -> viewModel.onMonthYearChange(m, y) }
                 )
             }
@@ -171,6 +176,13 @@ fun AnalyticsScreen(
                 item {
                     performance?.let { 
                         MonthlyPerformanceCard(it)
+                    }
+                }
+
+                // Yearly Calculator & Health Summary (Only shown if yearly data is present)
+                if (yearlySummary != null) {
+                    item {
+                        YearlyCalculatorCard(yearlySummary = yearlySummary!!)
                     }
                 }
 
@@ -928,19 +940,52 @@ fun SimpleCalendarView(
 fun AnalyticsMonthPicker(
     selectedMonth: Int,
     selectedYear: Int,
+    availableMonths: List<Int> = emptyList(),
+    availableYears: List<Int> = emptyList(),
     onMonthYearSelected: (Int, Int) -> Unit
 ) {
     val scrollState = rememberScrollState()
-    val months = listOf(0) + (1..12).toList()
+    val monthsToDisplay = remember(availableMonths) {
+        if (availableMonths.isNotEmpty()) {
+            availableMonths
+        } else {
+            val nowMonth = Calendar.getInstance().get(Calendar.MONTH) + 1
+            listOf(0, nowMonth)
+        }
+    }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(scrollState)
             .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        months.forEach { month ->
+        // Multi-year selector chips if more than 1 year exists in records
+        if (availableYears.size > 1) {
+            availableYears.forEach { yr ->
+                val isYearSelected = yr == selectedYear
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (isYearSelected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, if (isYearSelected) MaterialTheme.colorScheme.secondary else Color.Transparent),
+                    modifier = Modifier.clip(RoundedCornerShape(14.dp)).clickable { onMonthYearSelected(selectedMonth, yr) }
+                ) {
+                    Text(
+                        text = yr.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = if (isYearSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                        color = if (isYearSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    )
+                }
+            }
+            VerticalDivider(modifier = Modifier.height(20.dp), thickness = 1.dp, color = MaterialTheme.colorScheme.outlineVariant)
+        }
+
+        // Available Months with Data
+        monthsToDisplay.forEach { month ->
             val isSelected = month == selectedMonth
             val labelText = if (month == 0) {
                 "🌐 All-Time"
@@ -955,6 +1000,168 @@ fun AnalyticsMonthPicker(
                 label = { Text(labelText, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
                 shape = RoundedCornerShape(14.dp)
             )
+        }
+    }
+}
+
+@Composable
+fun YearlyCalculatorCard(
+    yearlySummary: com.example.myexpenditureapp.ui.viewmodel.YearlySummary,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            // Header Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("🗓️", fontSize = 16.sp)
+                    Text(
+                        text = "ANNUAL FINANCIAL HEALTH • ${yearlySummary.year}",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (yearlySummary.savingsRate >= 20) IncomeGreen.copy(alpha = 0.15f) else AmberWarning.copy(alpha = 0.15f),
+                    border = BorderStroke(1.dp, if (yearlySummary.savingsRate >= 20) IncomeGreen.copy(alpha = 0.35f) else AmberWarning.copy(alpha = 0.35f))
+                ) {
+                    Text(
+                        text = "${yearlySummary.savingsRate}% Saved",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (yearlySummary.savingsRate >= 20) IncomeGreen else AmberWarning,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            // Key Metrics Grid
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("Annual Outflow", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        text = yearlySummary.totalExpense.formatIndian(includeSymbol = true),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = ExpenseRed
+                    )
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Annual Inflow", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        text = yearlySummary.totalIncome.formatIndian(includeSymbol = true),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = IncomeGreen
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("Net Retained", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        text = yearlySummary.netSavings.formatIndian(includeSymbol = true),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (yearlySummary.netSavings >= BigDecimal.ZERO) IncomeGreen else ExpenseRed
+                    )
+                }
+            }
+
+            HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+            // Sub-metrics row: Avg Monthly Burn & Top Category
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("🔥", fontSize = 14.sp)
+                    Column {
+                        Text("Avg Monthly Burn", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            text = "${yearlySummary.averageMonthlyExpense.formatIndian(includeSymbol = true)}/mo",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("👑", fontSize = 14.sp)
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("Top Category", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            text = yearlySummary.topCategory,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            // Month-by-Month Mini Bar Progression
+            val maxMonthlySpend = yearlySummary.monthlyBreakdown.values.maxOrNull()?.max(BigDecimal.ONE) ?: BigDecimal.ONE
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Monthly Outflow Progression (${yearlySummary.year})",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    val cal = Calendar.getInstance()
+                    for (m in 1..12) {
+                        val spend = yearlySummary.monthlyBreakdown[m] ?: BigDecimal.ZERO
+                        val heightFraction = if (maxMonthlySpend > BigDecimal.ZERO) {
+                            (spend.divide(maxMonthlySpend, 2, RoundingMode.HALF_UP).toFloat()).coerceIn(0.08f, 1f)
+                        } else 0.08f
+                        cal.set(Calendar.MONTH, m - 1)
+                        val mName = cal.getDisplayName(Calendar.MONTH, Calendar.NARROW_FORMAT, Locale.getDefault()) ?: ""
+
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height((36 * heightFraction).dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(
+                                        if (spend > BigDecimal.ZERO) MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
+                                        else MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                            )
+                            Text(
+                                text = mName,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

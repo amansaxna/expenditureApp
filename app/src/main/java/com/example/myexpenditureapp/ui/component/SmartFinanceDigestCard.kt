@@ -300,34 +300,52 @@ fun SmartFinanceDigestCard(
                 }
             }
 
-            // PRIMARY HERO: Total Liquid Balance
+            // PRIMARY HERO: Monthly / Cumulative Outflow
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .clickable {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onTotalBalanceClick()
+                        onSpentMonthClick()
                     }
                     .padding(vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = activeDigest.totalSpentThisMonth.formatIndian(includeSymbol = true, includeDecimals = false),
+                        style = MaterialTheme.typography.displaySmall.copy(
+                            fontFamily = MonospaceFont,
+                            fontWeight = FontWeight.Black
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = ExpenseRed.copy(alpha = 0.12f),
+                        border = BorderStroke(0.5.dp, ExpenseRed.copy(alpha = 0.3f))
+                    ) {
+                        Text(
+                            text = if (isOverallHistory) "ALL-TIME SPENT" else "${activeDigest.monthName.take(3).uppercase()} SPENT",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            fontWeight = FontWeight.ExtraBold,
+                            color = ExpenseRed,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
                 Text(
-                    text = activeDigest.totalLiquidBalance.formatIndian(includeSymbol = true, includeDecimals = false),
-                    style = MaterialTheme.typography.displaySmall.copy(
-                        fontFamily = MonospaceFont,
-                        fontWeight = FontWeight.Black
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "Across all active accounts and wallets",
+                    text = if (isOverallHistory) "Total outflow across all recorded transactions" else "Total outflow in ${activeDigest.monthName} across all accounts",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            // 3-Metric Snapshot Row (Spent • Today's Burn • Safe Allowance)
+            // 3-Metric Snapshot Row (Net Balance • Today's Burn • Safe Allowance)
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -341,30 +359,30 @@ fun SmartFinanceDigestCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Spent (Month / All-Time)
+                    // Net Balance (Liquid Funds across all accounts)
                     Column(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
                             .clickable {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                onSpentMonthClick()
+                                onTotalBalanceClick()
                             }
                             .padding(horizontal = 6.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = "Spent (${if (isOverallHistory) "All-Time" else activeDigest.monthName.take(3)})",
+                            text = "Net Balance",
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = FontWeight.SemiBold
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = activeDigest.totalSpentThisMonth.formatIndian(includeSymbol = true, includeDecimals = false),
+                            text = activeDigest.totalLiquidBalance.formatIndian(includeSymbol = true, includeDecimals = false),
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontFamily = MonospaceFont,
                                 fontWeight = FontWeight.Bold
                             ),
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = if (activeDigest.totalLiquidBalance < BigDecimal.ZERO) ExpenseRed else MaterialTheme.colorScheme.onSurface
                         )
                     }
 

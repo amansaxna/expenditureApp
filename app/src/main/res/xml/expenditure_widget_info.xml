@@ -3,6 +3,15 @@
     android:initialLayout="@layout/glance_default_layout"
     android:minWidth="110dp"
     android:minHeight="110dp"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
+    android:minResizeWidth="100dp"
+    android:minResizeHeight="80dp"
+    android:maxResizeWidth="500dp"
+    android:maxResizeHeight="600dp"
     android:resizeMode="horizontal|vertical"
     android:updatePeriodMillis="86400000"
-    android:widgetCategory="home_screen" />
+    android:widgetCategory="home_screen|keyguard"
+    android:description="@string/app_name"
+    android:previewImage="@drawable/ic_launcher_foreground" />
+
