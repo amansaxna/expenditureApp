@@ -79,6 +79,7 @@ fun AccountListScreen(
     onOpenBudgets: () -> Unit = {},
     onEditBudget: (Long) -> Unit = {},
     onOpenAccounts: () -> Unit = {},
+    onOpenMicroAnalysis: ((Boolean) -> Unit)? = null,
     settlementViewModel: com.example.myexpenditureapp.ui.viewmodel.MonthlySettlementViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
     val accounts by accountViewModel.accounts.collectAsStateWithLifecycle()
@@ -272,6 +273,7 @@ fun AccountListScreen(
                     onTodayBurnClick = onOpenTransactions,
                     onLeakRadarClick = onOpenSmartInbox,
                     onUpcomingBillsClick = onOpenSubscriptions,
+                    onOpenMicroAnalysis = onOpenMicroAnalysis,
                     onSaveBudgetLimit = { newLimit ->
                         val currentCal = java.util.Calendar.getInstance()
                         val m = currentCal.get(java.util.Calendar.MONTH) + 1

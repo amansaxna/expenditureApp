@@ -20,6 +20,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import androidx.compose.material.icons.automirrored.filled.TrendingDown
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -234,34 +236,58 @@ fun TransactionOverlayDialog(
                 )
 
                 // Segmented Type Selector
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                        .padding(3.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    listOf("Expense" to ExpenseRed, "Income" to IncomeGreen, "Transfer" to BlueAccent).forEach { (t, activeColor) ->
-                        val isSelected = type == t
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (isSelected) activeColor.copy(alpha = 0.2f) else Color.Transparent)
-                                .clickable {
-                                    type = t
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(3.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        val types = listOf(
+                            Triple("Expense", ExpenseRed, Icons.AutoMirrored.Filled.TrendingDown),
+                            Triple("Income", IncomeGreen, Icons.AutoMirrored.Filled.TrendingUp),
+                            Triple("Transfer", BlueAccent, Icons.Default.SwapHoriz)
+                        )
+                        types.forEach { (t, activeColor, icon) ->
+                            val isSelected = type == t
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        type = t
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    },
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) activeColor.copy(alpha = 0.18f) else Color.Transparent,
+                                border = if (isSelected) BorderStroke(1.5.dp, activeColor) else null,
+                                shadowElevation = if (isSelected) 1.dp else 0.dp
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp),
+                                        tint = if (isSelected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        text = t,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
-                                .padding(vertical = 8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = t,
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            }
                         }
                     }
                 }

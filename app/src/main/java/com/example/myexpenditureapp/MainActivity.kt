@@ -29,6 +29,10 @@ import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.animation.*
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.navigationevent.NavigationEvent
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.material3.adaptive.layout.calculatePaneScaffoldDirective
@@ -275,6 +279,67 @@ fun MainScreen(shortcutAction: String? = null) {
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(bottom = innerPadding.calculateBottomPadding()),
+                    transitionSpec = {
+                        val initialKey = initialState.key.toString()
+                        val targetKey = targetState.key.toString()
+                        val initialTopIndex = getTopLevelIndexByKey(initialKey)
+                        val targetTopIndex = getTopLevelIndexByKey(targetKey)
+
+                        if (initialTopIndex >= 0 && targetTopIndex >= 0 && initialTopIndex != targetTopIndex) {
+                            if (targetTopIndex > initialTopIndex) {
+                                (slideInHorizontally(
+                                    animationSpec = spring(dampingRatio = 0.86f, stiffness = 420f)
+                                ) { (it * 0.35f).toInt() } + fadeIn(tween(220))) togetherWith
+                                (slideOutHorizontally(
+                                    animationSpec = spring(dampingRatio = 0.86f, stiffness = 420f)
+                                ) { (-it * 0.35f).toInt() } + fadeOut(tween(180)))
+                            } else {
+                                (slideInHorizontally(
+                                    animationSpec = spring(dampingRatio = 0.86f, stiffness = 420f)
+                                ) { (-it * 0.35f).toInt() } + fadeIn(tween(220))) togetherWith
+                                (slideOutHorizontally(
+                                    animationSpec = spring(dampingRatio = 0.86f, stiffness = 420f)
+                                ) { (it * 0.35f).toInt() } + fadeOut(tween(180)))
+                            }
+                        } else if (isModalKey(targetKey)) {
+                            (slideInVertically(
+                                animationSpec = spring(dampingRatio = 0.82f, stiffness = 420f)
+                            ) { (it * 0.22f).toInt() } + fadeIn(tween(240)) + scaleIn(initialScale = 0.96f)) togetherWith
+                            (scaleOut(targetScale = 0.96f) + fadeOut(tween(180)))
+                        } else {
+                            (slideInHorizontally(
+                                animationSpec = spring(dampingRatio = 0.84f, stiffness = 450f)
+                            ) { it } + fadeIn(tween(240))) togetherWith
+                            (slideOutHorizontally(
+                                animationSpec = spring(dampingRatio = 0.84f, stiffness = 450f)
+                            ) { -it / 4 } + fadeOut(tween(180)))
+                        }
+                    },
+                    popTransitionSpec = {
+                        val initialKey = initialState.key.toString()
+                        if (isModalKey(initialKey)) {
+                            (scaleIn(initialScale = 0.96f) + fadeIn(tween(220))) togetherWith
+                            (slideOutVertically(
+                                animationSpec = spring(dampingRatio = 0.85f, stiffness = 450f)
+                            ) { (it * 0.22f).toInt() } + fadeOut(tween(180)) + scaleOut(targetScale = 0.96f))
+                        } else {
+                            (slideInHorizontally(
+                                animationSpec = spring(dampingRatio = 0.84f, stiffness = 450f)
+                            ) { -it / 4 } + fadeIn(tween(220))) togetherWith
+                            (slideOutHorizontally(
+                                animationSpec = spring(dampingRatio = 0.84f, stiffness = 450f)
+                            ) { it } + fadeOut(tween(180)))
+                        }
+                    },
+                    predictivePopTransitionSpec = { swipeEdge ->
+                        if (swipeEdge == NavigationEvent.EDGE_RIGHT) {
+                            (slideInHorizontally(spring(dampingRatio = 0.9f, stiffness = 700f)) { it / 3 } + fadeIn(tween(200))) togetherWith
+                            (slideOutHorizontally(spring(dampingRatio = 0.9f, stiffness = 700f)) { -it } + scaleOut(targetScale = 0.92f))
+                        } else {
+                            (slideInHorizontally(spring(dampingRatio = 0.9f, stiffness = 700f)) { -it / 3 } + fadeIn(tween(200))) togetherWith
+                            (slideOutHorizontally(spring(dampingRatio = 0.9f, stiffness = 700f)) { it } + scaleOut(targetScale = 0.92f))
+                        }
+                    },
                     entryProvider = entryProvider {
                         entry<Route.AccountList>(
                             metadata = ListDetailSceneStrategy.listPane(
@@ -301,7 +366,10 @@ fun MainScreen(shortcutAction: String? = null) {
                                 onOpenSubscriptions = { backStack.add(Route.SubscriptionList) },
                                 onOpenBudgets = { backStack.add(Route.BudgetList) },
                                 onEditBudget = { backStack.add(Route.BudgetEdit(it)) },
-                                onOpenAccounts = { backStack.add(Route.AccountList) }
+                                onOpenAccounts = { backStack.add(Route.AccountList) },
+                                onOpenMicroAnalysis = { isOverall ->
+                                    backStack.add(Route.MicroExpenditureAnalysis(initialIsOverall = isOverall))
+                                }
                             )
                         }
                     entry<Route.AccountEdit>(
@@ -516,7 +584,12 @@ fun MainScreen(shortcutAction: String? = null) {
                         metadata = ListDetailSceneStrategy.listPane()
                     ) {
                         val viewModel: AnalyticsViewModel = viewModel()
-                        AnalyticsScreen(viewModel = viewModel)
+                        AnalyticsScreen(
+                            viewModel = viewModel,
+                            onNavigateToMicroAnalysis = { isOverall ->
+                                backStack.add(Route.MicroExpenditureAnalysis(initialIsOverall = isOverall))
+                            }
+                        )
                     }
                     entry<Route.Settings>(
                         metadata = ListDetailSceneStrategy.listPane()
@@ -563,6 +636,27 @@ fun MainScreen(shortcutAction: String? = null) {
                             viewModel = transactionViewModel,
                             onReviewTransaction = { backStack.add(Route.TransactionReview(it.id)) },
                             onBack = { backStack.removeLastOrNull() }
+                        )
+                    }
+                    entry<Route.MicroExpenditureAnalysis>(
+                        metadata = ListDetailSceneStrategy.detailPane()
+                    ) { route ->
+                        val analyticsViewModel: AnalyticsViewModel = viewModel()
+                        val filterState by analyticsViewModel.filterState.collectAsStateWithLifecycle()
+                        val allTransactions by analyticsViewModel.transactions.collectAsStateWithLifecycle()
+                        val categories by analyticsViewModel.categories.collectAsStateWithLifecycle()
+
+                        MicroExpenditureAnalysisScreen(
+                            allTransactions = allTransactions,
+                            allCategories = categories,
+                            selectedMonth = filterState.month,
+                            selectedYear = filterState.year,
+                            initialIsOverall = route.initialIsOverall,
+                            onBack = { backStack.removeLastOrNull() },
+                            onNavigateToTransactions = {
+                                backStack.clear()
+                                backStack.add(Route.TransactionList)
+                            }
                         )
                     }
                 }
@@ -745,3 +839,21 @@ fun AppBottomNavBar(
         }
     }
 }
+
+private fun isModalKey(key: String): Boolean {
+    return key.contains("TransactionEdit") ||
+            key.contains("AccountEdit") ||
+            key.contains("BudgetEdit") ||
+            key.contains("CategoryEdit")
+}
+
+private fun getTopLevelIndexByKey(key: String): Int {
+    return when {
+        key.contains("AccountList") -> 0
+        key.contains("TransactionList") -> 1
+        key.contains("Analytics") -> 2
+        key.contains("Settings") -> 3
+        else -> -1
+    }
+}
+

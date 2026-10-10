@@ -42,7 +42,8 @@ import java.util.*
 @Composable
 fun AnalyticsScreen(
     viewModel: AnalyticsViewModel,
-    settlementViewModel: com.example.myexpenditureapp.ui.viewmodel.MonthlySettlementViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    settlementViewModel: com.example.myexpenditureapp.ui.viewmodel.MonthlySettlementViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
+    onNavigateToMicroAnalysis: (Boolean) -> Unit = {}
 ) {
     val categorySpending by viewModel.categorySpending.collectAsStateWithLifecycle(initialValue = emptyMap())
     val weeklySpending by viewModel.weeklySpending.collectAsStateWithLifecycle(initialValue = emptyMap())
@@ -191,9 +192,14 @@ fun AnalyticsScreen(
                 }
 
                 item {
+                    val allTxs by viewModel.transactions.collectAsStateWithLifecycle(initialValue = emptyList())
                     MicroExpenditureBreakdownCard(
                         transactions = transactions,
-                        categories = categories
+                        allTransactions = allTxs,
+                        categories = categories,
+                        selectedMonth = filterState.month,
+                        selectedYear = filterState.year,
+                        onCardClick = onNavigateToMicroAnalysis
                     )
                 }
 
@@ -1272,26 +1278,51 @@ fun MonthlyPerformanceCard(performance: com.example.myexpenditureapp.ui.viewmode
 @Composable
 fun MicroExpenditureBreakdownCard(
     transactions: List<com.example.myexpenditureapp.data.entity.Transaction>,
-    categories: List<com.example.myexpenditureapp.data.entity.Category>
+    allTransactions: List<com.example.myexpenditureapp.data.entity.Transaction>,
+    categories: List<com.example.myexpenditureapp.data.entity.Category>,
+    selectedMonth: Int,
+    selectedYear: Int,
+    onCardClick: (Boolean) -> Unit = {}
 ) {
-    var customThresholdText by remember { mutableStateOf("") }
-    val customThreshold = customThresholdText.toBigDecimalOrNull()
+    val haptic = LocalHapticFeedback.current
+    var isOverallHistory by remember { mutableStateOf(false) }
 
-    val microSummary = remember(transactions, categories, customThreshold) {
+    val activeMonth = if (selectedMonth in 1..12) selectedMonth else Calendar.getInstance().get(Calendar.MONTH) + 1
+    val activeYear = if (selectedYear > 2000) selectedYear else Calendar.getInstance().get(Calendar.YEAR)
+    val monthDisplayName = remember(activeMonth, activeYear) {
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.MONTH, activeMonth - 1)
+            set(Calendar.YEAR, activeYear)
+        }
+        SimpleDateFormat("MMM yyyy", Locale.getDefault()).format(cal.time)
+    }
+
+    val activeTransactions = remember(transactions, allTransactions, isOverallHistory) {
+        if (isOverallHistory) allTransactions else transactions
+    }
+
+    val microSummary = remember(activeTransactions, categories) {
         com.example.myexpenditureapp.domain.insights.MicroSpendAnalyzer.analyze(
-            transactions = transactions,
-            categories = categories,
-            customThresholdOverride = customThreshold
+            transactions = activeTransactions,
+            categories = categories
         )
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .clickable {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onCardClick(isOverallHistory)
+            },
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Header Row with Title and Limit Tag
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1324,6 +1355,93 @@ fun MicroExpenditureBreakdownCard(
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
+                }
+            }
+
+            // PROMINENT SEGMENTED TIMEFRAME SELECTOR (Month vs All-Time)
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // Month Segment
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(9.dp))
+                            .clickable {
+                                if (isOverallHistory) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    isOverallHistory = false
+                                }
+                            },
+                        shape = RoundedCornerShape(9.dp),
+                        color = if (!isOverallHistory) MaterialTheme.colorScheme.primary else Color.Transparent,
+                        shadowElevation = if (!isOverallHistory) 2.dp else 0.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(vertical = 6.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.CalendarToday,
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp),
+                                tint = if (!isOverallHistory) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = monthDisplayName,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = if (!isOverallHistory) FontWeight.Bold else FontWeight.Medium,
+                                color = if (!isOverallHistory) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // All-Time Segment
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(9.dp))
+                            .clickable {
+                                if (!isOverallHistory) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    isOverallHistory = true
+                                }
+                            },
+                        shape = RoundedCornerShape(9.dp),
+                        color = if (isOverallHistory) MaterialTheme.colorScheme.primary else Color.Transparent,
+                        shadowElevation = if (isOverallHistory) 2.dp else 0.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(vertical = 6.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.AllInclusive,
+                                contentDescription = null,
+                                modifier = Modifier.size(13.dp),
+                                tint = if (isOverallHistory) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = "All-Time",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = if (isOverallHistory) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isOverallHistory) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
             }
 
@@ -1381,6 +1499,39 @@ fun MicroExpenditureBreakdownCard(
                             )
                         }
                     }
+                }
+            }
+
+            // Clickable Call-to-Action to Open In-Depth Page
+            HorizontalDivider(
+                thickness = 0.5.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Tap for full in-depth category analysis",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Explore",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Explore",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(13.dp)
+                    )
                 }
             }
         }

@@ -56,7 +56,8 @@ fun SmartFinanceDigestCard(
     onUpcomingBillsClick: () -> Unit = {},
     onSaveBudgetLimit: ((BigDecimal) -> Unit)? = null,
     onTacticalActionClick: (ActionType) -> Unit = {},
-    onCardClick: () -> Unit = {}
+    onCardClick: () -> Unit = {},
+    onOpenMicroAnalysis: ((Boolean) -> Unit)? = null
 ) {
     val haptic = LocalHapticFeedback.current
     var showEditAllowanceDialog by remember { mutableStateOf(false) }
@@ -139,6 +140,7 @@ fun SmartFinanceDigestCard(
             safeDailySpend = activeDigest.safeDailySpend,
             onEditThresholdClick = { showThresholdEditorDialog = true },
             onViewAllClick = onSpentMonthClick,
+            onOpenMicroAnalysis = onOpenMicroAnalysis,
             onDismiss = { showMicroDetailDialog = false }
         )
     }
@@ -216,10 +218,10 @@ fun SmartFinanceDigestCard(
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     ) {
                         Row(
-                            modifier = Modifier.padding(2.dp),
+                            modifier = Modifier.padding(3.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             // Month Segment Pill
@@ -233,15 +235,27 @@ fun SmartFinanceDigestCard(
                                         }
                                     },
                                 shape = RoundedCornerShape(12.dp),
-                                color = if (!isOverallHistory) MaterialTheme.colorScheme.primary else Color.Transparent
+                                color = if (!isOverallHistory) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                shadowElevation = if (!isOverallHistory) 2.dp else 0.dp
                             ) {
-                                Text(
-                                    text = digest.monthName.take(3),
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = if (!isOverallHistory) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                )
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.CalendarToday,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(11.dp),
+                                        tint = if (!isOverallHistory) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = digest.monthName.take(3),
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = if (!isOverallHistory) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
 
                             // Overall Segment Pill
@@ -255,15 +269,27 @@ fun SmartFinanceDigestCard(
                                         }
                                     },
                                 shape = RoundedCornerShape(12.dp),
-                                color = if (isOverallHistory) MaterialTheme.colorScheme.primary else Color.Transparent
+                                color = if (isOverallHistory) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                shadowElevation = if (isOverallHistory) 2.dp else 0.dp
                             ) {
-                                Text(
-                                    text = "Overall",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = if (isOverallHistory) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                )
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.AllInclusive,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(12.dp),
+                                        tint = if (isOverallHistory) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "Overall",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = if (isOverallHistory) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }
@@ -541,7 +567,11 @@ fun SmartFinanceDigestCard(
                         .clip(RoundedCornerShape(14.dp))
                         .clickable {
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            showMicroDetailDialog = true
+                            if (onOpenMicroAnalysis != null) {
+                                onOpenMicroAnalysis(isOverallHistory)
+                            } else {
+                                showMicroDetailDialog = true
+                            }
                         },
                     shape = RoundedCornerShape(14.dp),
                     color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
@@ -770,12 +800,15 @@ fun MicroExpenditureDetailDialog(
     safeDailySpend: BigDecimal,
     onEditThresholdClick: () -> Unit,
     onViewAllClick: () -> Unit,
+    onOpenMicroAnalysis: ((Boolean) -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     var isOverallHistory by remember { mutableStateOf(false) }
     val currentCal = Calendar.getInstance()
     val currentMonth = currentCal.get(Calendar.MONTH) + 1
     val currentYear = currentCal.get(Calendar.YEAR)
+    val monthName = remember { SimpleDateFormat("MMMM", Locale.getDefault()).format(currentCal.time) }
 
     val targetTxs = remember(allTransactions, isOverallHistory) {
         if (isOverallHistory) allTransactions else allTransactions.filter { tx ->
@@ -795,28 +828,104 @@ fun MicroExpenditureDetailDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("☕", fontSize = 18.sp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("☕", fontSize = 20.sp)
                     Text("Small Expenditures", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                 }
-                
+
+                // Distinct Segmented Switcher showing BOTH options clearly
                 Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.clip(RoundedCornerShape(20.dp)).clickable { isOverallHistory = !isOverallHistory }
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        text = if (isOverallHistory) "All-Time" else "This Month",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(3.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        // Month Segment
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(9.dp))
+                                .clickable {
+                                    if (isOverallHistory) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        isOverallHistory = false
+                                    }
+                                },
+                            shape = RoundedCornerShape(9.dp),
+                            color = if (!isOverallHistory) MaterialTheme.colorScheme.primary else Color.Transparent,
+                            shadowElevation = if (!isOverallHistory) 2.dp else 0.dp
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(vertical = 6.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.CalendarToday,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(13.dp),
+                                    tint = if (!isOverallHistory) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = monthName,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = if (!isOverallHistory) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (!isOverallHistory) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        // All-Time Segment
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(9.dp))
+                                .clickable {
+                                    if (!isOverallHistory) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        isOverallHistory = true
+                                    }
+                                },
+                            shape = RoundedCornerShape(9.dp),
+                            color = if (isOverallHistory) MaterialTheme.colorScheme.primary else Color.Transparent,
+                            shadowElevation = if (isOverallHistory) 2.dp else 0.dp
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(vertical = 6.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.AllInclusive,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                    tint = if (isOverallHistory) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = "All-Time",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = if (isOverallHistory) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isOverallHistory) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -888,7 +997,17 @@ fun MicroExpenditureDetailDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (onOpenMicroAnalysis != null) {
+                    TextButton(onClick = {
+                        onDismiss()
+                        onOpenMicroAnalysis(isOverallHistory)
+                    }) {
+                        Text("In-Depth Page →", fontWeight = FontWeight.Bold)
+                    }
+                }
+                TextButton(onClick = onDismiss) { Text("Close") }
+            }
         }
     )
 }
@@ -901,10 +1020,12 @@ fun MajorExpenditureDetailDialog(
     onViewAllClick: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
     var isOverallHistory by remember { mutableStateOf(false) }
     val currentCal = Calendar.getInstance()
     val currentMonth = currentCal.get(Calendar.MONTH) + 1
     val currentYear = currentCal.get(Calendar.YEAR)
+    val monthName = remember { SimpleDateFormat("MMMM", Locale.getDefault()).format(currentCal.time) }
 
     val targetTxs = remember(allTransactions, isOverallHistory) {
         if (isOverallHistory) allTransactions else allTransactions.filter { tx ->
@@ -924,28 +1045,104 @@ fun MajorExpenditureDetailDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("🐘", fontSize = 18.sp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("🐘", fontSize = 20.sp)
                     Text("Major Expenditures", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                 }
-                
+
+                // Distinct Segmented Switcher showing BOTH options clearly
                 Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.clip(RoundedCornerShape(20.dp)).clickable { isOverallHistory = !isOverallHistory }
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        text = if (isOverallHistory) "All-Time" else "This Month",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(3.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        // Month Segment
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(9.dp))
+                                .clickable {
+                                    if (isOverallHistory) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        isOverallHistory = false
+                                    }
+                                },
+                            shape = RoundedCornerShape(9.dp),
+                            color = if (!isOverallHistory) MaterialTheme.colorScheme.primary else Color.Transparent,
+                            shadowElevation = if (!isOverallHistory) 2.dp else 0.dp
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(vertical = 6.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.CalendarToday,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(13.dp),
+                                    tint = if (!isOverallHistory) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = monthName,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = if (!isOverallHistory) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (!isOverallHistory) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        // All-Time Segment
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(9.dp))
+                                .clickable {
+                                    if (!isOverallHistory) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        isOverallHistory = true
+                                    }
+                                },
+                            shape = RoundedCornerShape(9.dp),
+                            color = if (isOverallHistory) MaterialTheme.colorScheme.primary else Color.Transparent,
+                            shadowElevation = if (isOverallHistory) 2.dp else 0.dp
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(vertical = 6.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.AllInclusive,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                    tint = if (isOverallHistory) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = "All-Time",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = if (isOverallHistory) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isOverallHistory) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
                 }
             }
         },

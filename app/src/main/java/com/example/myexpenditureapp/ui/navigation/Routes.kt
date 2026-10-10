@@ -48,4 +48,7 @@ sealed interface Route : NavKey {
 
     @Serializable
     data object SmartInbox : Route
+
+    @Serializable
+    data class MicroExpenditureAnalysis(val initialIsOverall: Boolean = false) : Route
 }

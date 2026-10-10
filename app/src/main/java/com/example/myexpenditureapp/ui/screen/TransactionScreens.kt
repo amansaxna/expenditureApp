@@ -1139,36 +1139,58 @@ fun TransactionEditScreen(
             }
 
             // Segmented Transaction Type Selector
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                listOf("Expense" to ExpenseRed, "Income" to IncomeGreen, "Transfer" to BlueAccent).forEach { (t, activeColor) ->
-                    val isSelected = type == t
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(
-                                if (isSelected) activeColor.copy(alpha = 0.2f) else Color.Transparent
-                            )
-                            .clickable {
-                                type = t
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    val types = listOf(
+                        Triple("Expense", ExpenseRed, Icons.AutoMirrored.Filled.TrendingDown),
+                        Triple("Income", IncomeGreen, Icons.AutoMirrored.Filled.TrendingUp),
+                        Triple("Transfer", BlueAccent, Icons.Default.SwapHoriz)
+                    )
+                    types.forEach { (t, activeColor, icon) ->
+                        val isSelected = type == t
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable {
+                                    type = t
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                },
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) activeColor.copy(alpha = 0.18f) else Color.Transparent,
+                            border = if (isSelected) BorderStroke(1.5.dp, activeColor) else null,
+                            shadowElevation = if (isSelected) 1.dp else 0.dp
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(vertical = 10.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(15.dp),
+                                    tint = if (isSelected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = t,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                                    color = if (isSelected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = t,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
-                            color = if (isSelected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        }
                     }
                 }
             }
@@ -1739,36 +1761,58 @@ fun TransactionReviewScreen(
             )
 
             // Segmented Transaction Type Selector
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                listOf("Expense" to ExpenseRed, "Income" to IncomeGreen, "Transfer" to BlueAccent).forEach { (t, activeColor) ->
-                    val isSelected = type == t
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(
-                                if (isSelected) activeColor.copy(alpha = 0.2f) else Color.Transparent
-                            )
-                            .clickable {
-                                type = t
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    val types = listOf(
+                        Triple("Expense", ExpenseRed, Icons.AutoMirrored.Filled.TrendingDown),
+                        Triple("Income", IncomeGreen, Icons.AutoMirrored.Filled.TrendingUp),
+                        Triple("Transfer", BlueAccent, Icons.Default.SwapHoriz)
+                    )
+                    types.forEach { (t, activeColor, icon) ->
+                        val isSelected = type == t
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable {
+                                    type = t
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                },
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) activeColor.copy(alpha = 0.18f) else Color.Transparent,
+                            border = if (isSelected) BorderStroke(1.5.dp, activeColor) else null,
+                            shadowElevation = if (isSelected) 1.dp else 0.dp
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(vertical = 10.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(15.dp),
+                                    tint = if (isSelected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = t,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                                    color = if (isSelected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
-                            .padding(vertical = 10.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = t,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
-                            color = if (isSelected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        }
                     }
                 }
             }
