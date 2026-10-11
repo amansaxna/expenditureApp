@@ -4,6 +4,12 @@
 > Automated bank SMS & UPI parsing, double-entry accounting precision with `BigDecimal`, hardware-accelerated AI mascot companion, micro-expenditure leak radar, and zero network telemetry.
 
 <p align="center">
+  <a href="https://github.com/amansaxna/expenditureApp">
+    <img src="https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub Repository" />
+  </a>
+  <a href="https://amansaxna.github.io/expenditureApp/">
+    <img src="https://img.shields.io/badge/Live%20Showcase-GitHub%20Pages-0969DA?style=for-the-badge&logo=githubpages&logoColor=white" alt="GitHub Pages Live Showcase" />
+  </a>
   <a href="docs/pitch_deck/index.html">
     <img src="https://img.shields.io/badge/Keynote%20Deck-Interactive%20Slides-4F46E5?style=for-the-badge&logo=google-slides&logoColor=white" alt="Interactive Keynote Pitch Deck" />
   </a>
@@ -12,8 +18,26 @@
   </a>
 </p>
 
+<p align="center">
+  <a href="https://kotlinlang.org/">
+    <img src="https://img.shields.io/badge/Kotlin-2.2%2B-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white" alt="Kotlin 2.2+" />
+  </a>
+  <a href="https://developer.android.com">
+    <img src="https://img.shields.io/badge/Android-API%2035%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android API 35+" />
+  </a>
+  <a href="https://developer.android.com/jetpack/compose">
+    <img src="https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white" alt="Jetpack Compose Material 3" />
+  </a>
+  <a href="https://developer.android.com/training/data-storage/room">
+    <img src="https://img.shields.io/badge/Room%20DB-SQLite%202.7-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="Room SQLite 2.7" />
+  </a>
+  <a href="#-security--privacy-first-guarantee">
+    <img src="https://img.shields.io/badge/Privacy-100%25%20Local-10B981?style=for-the-badge&logo=shield&logoColor=white" alt="100% Local Privacy" />
+  </a>
+</p>
+
 > [!TIP]
-> 📽️ **Interactive Product Deck**: Open [`Deck`](docs/pitch_deck/index.html) in your browser for a standalone, animated 12-slide Keynote-style presentation featuring Nomi and the app's core flows.
+> 📽️ **Interactive Product Deck**: Open [`Deck`](docs/pitch_deck/index.html) in your browser for a standalone, animated 12-slide Keynote-style presentation featuring Nomi and the app's core flows. View source on [GitHub](https://github.com/amansaxna/expenditureApp).
 
 ---
 
@@ -23,8 +47,6 @@
 | :---: | :---: | :---: | :---: | :---: |
 | ![Financial Command Center](docs/play_store/01_financial_command_center.jpg) | ![Instant Auto-Payment](docs/play_store/02_instant_autopayment.jpg) | ![Deep Spend Analytics](docs/play_store/03_deep_spend_analytics.jpg) | ![Meet Nomi AI Companion](docs/play_store/04_meet_nomi_ai_companion.jpg) | ![Widget & Ambient Alerts](docs/play_store/05_smart_widgets_notifications.jpg) |
 | *Live Budget Digest, Health Score & Safe Burn* | *Real-Time SMS Detection & 1-Tap Logging* | *Runway Forecasting & Micro-Leak Radar* | *Zero-Bloat Hardware-Accelerated Mascot* | *Home Screen Glance & Instant Notification Review* |
-
----
 
 ---
 
@@ -70,19 +92,26 @@ Tapping Nomi anywhere in the application awakens the full **Companion Console**,
 ## 📸 App Screens Gallery
 
 ### Primary App Screens
+
 | 01. Dashboard | 02. Nomi Companion | 03. Analytics & Runway |
 | :---: | :---: | :---: |
 | ![Dashboard](docs/screenshots/01_dashboard.png) | ![Nomi Companion](docs/screenshots/02_nomi_companion.png) | ![Analytics](docs/screenshots/03_analytics.png) |
+| *Live Health Score & Budget Digest* | *Vector Animat Mascot & Mood Matrix* | *Burn Velocity & Runway Trajectory* |
+
+### Transaction Flow & Hierarchy
 
 | 04. Transactions Feed | 05. Add / Edit Transaction | 06. Category & Subcategories | 07. Auto Payment Overlay |
 | :---: | :---: | :---: | :---: |
 | ![Transactions](docs/screenshots/04_transactions.png) | ![Add Transaction](docs/screenshots/05_add_transaction.png) | ![Category Sheet](docs/screenshots/06_category_sheet.png) | ![Payment Overlay](docs/screenshots/07_auto_payment_overlay.png) |
+| *Chronological Activity Feed* | *Quick Entry & Pacing Baseline* | *Two-Tier Hierarchy Engine* | *Zero-Latency Bank SMS Capture* |
 
 ### Glance Widget & Ambient Notifications
+
 | 08. Jetpack Glance Home Screen Widget | 09. Smart Notification Center & Review Drawer |
 | :---: | :---: |
 | ![Home Screen Widget](docs/screenshots/08_home_screen_widget.png) | ![Notification Center](docs/screenshots/09_notifications_shade.png) |
 | *Live Liquid Net, Safe Burn, 7-Day Sparkline & +Quick Add* | *Ambient Expenditure Ticker & 1-Tap SMS/UPI Review* |
+
 
 ---
 
