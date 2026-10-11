@@ -28,7 +28,7 @@
 </p>
 
 > [!TIP]
-> 📽️ **Interactive Product Deck**: Open [`Deck`](docs/pitch_deck/index.html) in your browser for a standalone, animated 12-slide Keynote-style presentation featuring Nomi and the app's core flows. View source on [GitHub](https://github.com/amansaxna/expenditureApp).
+> 📽️ **Interactive Product Deck**: Open [`Deck`](docs/pitch_deck/index.html) in your browser for a standalone, animated 13-slide Keynote-style presentation featuring Nomi and the app's core flows. View source on [GitHub](https://github.com/amansaxna/expenditureApp).
 
 ---
 
