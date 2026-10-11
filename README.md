@@ -28,7 +28,14 @@
 </p>
 
 > [!TIP]
-> 📽️ **Interactive Product Deck**: Open [`Deck`](docs/pitch_deck/index.html) in your browser for a standalone, animated 13-slide Keynote-style presentation featuring Nomi and the app's core flows. View source on [GitHub](https://github.com/amansaxna/expenditureApp).
+> 📽️ **Interactive Product Deck**: Open [`Deck`](docs/pitch_deck/index.html) in your browser for a standalone, animated 14-slide Keynote-style presentation featuring Nomi, the brand film, and core architectural flows. View source on [GitHub](https://github.com/amansaxna/expenditureApp).
+
+<p align="center">
+  <video src="docs/assets/spendzen_demo_walkthrough.mp4" width="420" controls autoplay loop muted playsinline style="max-width:100%; border-radius:36px; border:3px solid #1E293B; box-shadow:0 25px 60px -10px rgba(15,23,42,0.35); display:block; margin:28px auto 8px auto; background:#0B1019;">
+  </video>
+  <br />
+  <em>✨ Watch the SpendZen official promotional teaser & brand film</em>
+</p>
 
 ---
 
