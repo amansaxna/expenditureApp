@@ -86,16 +86,33 @@
     font-weight: 500;
   }
 
-  /* Centered spotlight images */
-  .markdown-body p[align="center"] img {
+  /* Centered spotlight images (excluding badges) */
+  .markdown-body p[align="center"] img:not([src*="shields.io"]) {
     border-radius: 16px;
     border: 1px solid rgba(15, 23, 42, 0.1);
     box-shadow: 0 12px 30px -4px rgba(15, 23, 42, 0.15);
     transition: transform 0.25s ease;
   }
 
-  .markdown-body p[align="center"] img:hover {
+  .markdown-body p[align="center"] img:not([src*="shields.io"]):hover {
     transform: translateY(-3px);
+  }
+
+  /* Badges: Clean, unshadowed, and aligned */
+  .markdown-body img[src*="shields.io"],
+  .markdown-body a img[src*="shields.io"],
+  .markdown-body p[align="center"] img[src*="shields.io"] {
+    border: none !important;
+    border-radius: 4px !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    vertical-align: middle;
+    margin: 3px 4px !important;
+    transition: transform 0.15s ease;
+  }
+
+  .markdown-body a img[src*="shields.io"]:hover {
+    transform: translateY(-2px);
   }
 
   /* Text tables formatting (Architecture, Channels, Emotion Matrix) */
@@ -123,4 +140,65 @@
   .markdown-body table:not(:has(img)) tr:nth-child(2n) td {
     background: #F8FAFC !important;
   }
+
+  /* Mermaid Architecture Diagram Container */
+  .mermaid-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 14px;
+    padding: 24px 16px;
+    margin: 1.5rem 0 2rem 0;
+    box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.06);
+    overflow-x: auto;
+  }
+
+  .mermaid-wrapper .mermaid {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+
+  .mermaid-wrapper svg {
+    max-width: 100%;
+    height: auto;
+  }
 </style>
+
+<!-- Mermaid.js support for GitHub Pages -->
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+  
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'neutral',
+    securityLevel: 'loose',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+  });
+
+  document.addEventListener('DOMContentLoaded', async () => {
+    const mermaidBlocks = document.querySelectorAll('pre code.language-mermaid, .language-mermaid');
+    if (!mermaidBlocks.length) return;
+
+    for (const codeBlock of mermaidBlocks) {
+      const pre = codeBlock.closest('pre') || codeBlock;
+      const graphDefinition = codeBlock.textContent.trim();
+      const wrapper = document.createElement('div');
+      wrapper.className = 'mermaid-wrapper';
+      const container = document.createElement('div');
+      container.className = 'mermaid';
+      container.textContent = graphDefinition;
+      wrapper.appendChild(container);
+      pre.parentNode.replaceChild(wrapper, pre);
+    }
+
+    try {
+      await mermaid.run();
+    } catch (err) {
+      console.error('Mermaid render error:', err);
+    }
+  });
+</script>
+

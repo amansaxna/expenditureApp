@@ -7,14 +7,11 @@
   <a href="https://github.com/amansaxna/expenditureApp">
     <img src="https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub Repository" />
   </a>
-  <a href="https://amansaxna.github.io/expenditureApp/">
-    <img src="https://img.shields.io/badge/Live%20Showcase-GitHub%20Pages-0969DA?style=for-the-badge&logo=githubpages&logoColor=white" alt="GitHub Pages Live Showcase" />
-  </a>
   <a href="docs/pitch_deck/index.html">
     <img src="https://img.shields.io/badge/Keynote%20Deck-Interactive%20Slides-4F46E5?style=for-the-badge&logo=google-slides&logoColor=white" alt="Interactive Keynote Pitch Deck" />
   </a>
-  <a href="docs/pitch_deck/index.html">
-    <img src="https://img.shields.io/badge/Design%20Theme-Obsidian%20%26%20Alpine-10B981?style=for-the-badge" alt="Design Theme" />
+  <a href="#-security--privacy-first-guarantee">
+    <img src="https://img.shields.io/badge/Privacy-100%25%20Local-10B981?style=for-the-badge&logo=shield&logoColor=white" alt="100% Local Privacy" />
   </a>
 </p>
 
@@ -27,12 +24,6 @@
   </a>
   <a href="https://developer.android.com/jetpack/compose">
     <img src="https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white" alt="Jetpack Compose Material 3" />
-  </a>
-  <a href="https://developer.android.com/training/data-storage/room">
-    <img src="https://img.shields.io/badge/Room%20DB-SQLite%202.7-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="Room SQLite 2.7" />
-  </a>
-  <a href="#-security--privacy-first-guarantee">
-    <img src="https://img.shields.io/badge/Privacy-100%25%20Local-10B981?style=for-the-badge&logo=shield&logoColor=white" alt="100% Local Privacy" />
   </a>
 </p>
 
