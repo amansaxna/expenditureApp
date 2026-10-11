@@ -1,0 +1,22 @@
+# GitLab CI/CD Pipeline for GitLab Pages
+# Publishes the SpendZen Keynote Pitch Deck as a static site
+
+image: alpine:latest
+
+pages:
+  stage: deploy
+  script:
+    - mkdir -p public
+    # Copy pitch deck as the root index.html
+    - cp docs/pitch_deck/index.html public/index.html
+    # Copy screenshots and assets referenced by the presentation
+    - mkdir -p public/docs
+    - cp -r docs/screenshots public/docs/screenshots
+    - cp -r docs/assets public/docs/assets
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "master"
