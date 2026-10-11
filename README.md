@@ -13,7 +13,7 @@
 </p>
 
 > [!TIP]
-> 📽️ **Interactive Product Deck**: Open [`docs/pitch_deck/index.html`](docs/pitch_deck/index.html) in your browser for a standalone, animated 12-slide Keynote-style presentation featuring Nomi and the app's core flows.
+> 📽️ **Interactive Product Deck**: Open [`Deck`](docs/pitch_deck/index.html) in your browser for a standalone, animated 12-slide Keynote-style presentation featuring Nomi and the app's core flows.
 
 ---
 
