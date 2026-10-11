@@ -3,6 +3,18 @@
 > **Local-First, Privacy-Preserving Intelligent Android Expenditure Tracker**  
 > Automated bank SMS & UPI parsing, double-entry accounting precision with `BigDecimal`, hardware-accelerated AI mascot companion, micro-expenditure leak radar, and zero network telemetry.
 
+<p align="center">
+  <a href="docs/pitch_deck/index.html">
+    <img src="https://img.shields.io/badge/Keynote%20Deck-Interactive%20Slides-4F46E5?style=for-the-badge&logo=google-slides&logoColor=white" alt="Interactive Keynote Pitch Deck" />
+  </a>
+  <a href="docs/pitch_deck/index.html">
+    <img src="https://img.shields.io/badge/Design%20Theme-Obsidian%20%26%20Alpine-10B981?style=for-the-badge" alt="Design Theme" />
+  </a>
+</p>
+
+> [!TIP]
+> 📽️ **Interactive Product Deck**: Open [`docs/pitch_deck/index.html`](docs/pitch_deck/index.html) in your browser for a standalone, animated 12-slide Keynote-style presentation featuring Nomi and the app's core flows.
+
 ---
 
 ## 📱 Google Play Store Showcase
